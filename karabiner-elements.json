@@ -94,6 +94,32 @@
                     "type": "basic"
                 }
             ]
+        },
+        {
+            "description": "left_shift(pressed alone) -> caps_lock",
+            "manipulators": [
+                {
+                    "type": "basic",
+                    "from": {
+                        "key_code": "left_shift",
+                        "modifiers": {
+                            "optional": [
+                                "any"
+                            ]
+                        }
+                    },
+                    "to": [
+                        {
+                            "key_code": "left_shift"
+                        }
+                    ],
+                    "to_if_alone": [
+                        {
+                            "key_code": "caps_lock"
+                        }
+                    ]
+                }
+            ]
         }
     ]
 }
