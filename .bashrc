@@ -20,11 +20,11 @@ alias lsblk='diskutil list'
 alias unmount='diskutil unmount'
 
 # Use Touch ID to sudo:
-if ! [[ `cat /etc/pam.d/authorization` == *"pam_tid.so"* ]]; then
-    echo "Add pam_tid.so to /etc/pam.d/authorization..."
+if ! [[ `cat /etc/pam.d/sudo` == *"pam_tid.so"* ]]; then
+    echo "Add pam_tid.so to /etc/pam.d/sudo..."
     sudo sed -i "" "1a\\
-auth       optional       pam_tid.so\\
-" /etc/pam.d/authorization
+auth       sufficient     pam_tid.so\\
+" /etc/pam.d/sudo
 fi
 
 # cd to current Finder folder:
