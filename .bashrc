@@ -40,4 +40,5 @@ cdf () {
   cd "$finderPath"
 }
 
+export BASH_SILENCE_DEPRECATION_WARNING=1
 # export ALL_PROXY=http://127.0.0.1:1080
