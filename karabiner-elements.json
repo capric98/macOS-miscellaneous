@@ -96,7 +96,7 @@
             ]
         },
         {
-            "description": "left_shift(pressed alone) -> caps_lock",
+            "description": "shift(pressed alone) -> caps_lock",
             "manipulators": [
                 {
                     "type": "basic",
