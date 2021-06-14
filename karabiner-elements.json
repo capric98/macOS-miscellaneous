@@ -17,7 +17,7 @@
                     },
                     "to": [
                         {
-                            "shell_command": "osascript -e 'ignoring application responses\n  tell application \"System Events\" to tell process \"Flameshot\"\n    tell menu bar item 1 of menu bar 2\n      click\n    end tell\n  end tell\nend ignoring\ndelay 0.1\ndo shell script \"killall System\\\\ Events\"\n\ntell application \"System Events\" to tell process \"Flameshot\"\n  tell menu bar item 1 of menu bar 2\n    click menu item \"Take Screenshot\" of menu 1\n  end tell\nend tell'"
+                            "shell_command": "osascript -e 'tell application \"System Events\"\n  tell application \"flameshot\" to activate\n  repeat while (value of attribute \"AXfocused\" of group 1 of scroll area of ¬\n    process \"Flameshot\" is {false})\n    keystroke \"<\" using command down\n  end repeat\nend tell\n\nignoring application responses\n  tell application \"System Events\" to tell process \"Flameshot\"\n    tell menu bar item 1 of menu bar 2\n      click\n    end tell\n  end tell\nend ignoring\ndelay 0.1\ndo shell script \"killall System\\\\ Events\"\n\ntell application \"System Events\" to tell process \"Flameshot\"\n  tell menu bar item 1 of menu bar 2\n    click menu item \"Take Screenshot\" of menu 1\n  end tell\nend tell'"
                         }
                     ]
                 }
