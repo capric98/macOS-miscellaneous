@@ -1,1 +1,8 @@
 realesrgan-ncnn-vulkan-macos
+*.jpg
+*.png
+*.webp
+*.gif
+*.jpeg
+
+.*
