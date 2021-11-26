@@ -1,0 +1,9 @@
+[user]
+    name  = 
+    email = 
+[url "ssh://git@github.com/"]
+    insteadOf = https://github.com/
+[credential]
+    helper = store
+[pull]
+    rebase = false
