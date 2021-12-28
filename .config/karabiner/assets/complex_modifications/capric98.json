@@ -29,7 +29,7 @@
                 {
                     "conditions": [
                         {
-                            "name": "key pressed",
+                            "name": "ctrl_pressed_recent",
                             "type": "variable_if",
                             "value": 1
                         }
@@ -65,7 +65,7 @@
                     "to": [
                         {
                             "set_variable": {
-                                "name": "key pressed",
+                                "name": "ctrl_pressed_recent",
                                 "value": 1
                             }
                         },
@@ -77,7 +77,7 @@
                         "to_if_canceled": [
                             {
                                 "set_variable": {
-                                    "name": "key pressed",
+                                    "name": "ctrl_pressed_recent",
                                     "value": 0
                                 }
                             }
@@ -85,7 +85,7 @@
                         "to_if_invoked": [
                             {
                                 "set_variable": {
-                                    "name": "key pressed",
+                                    "name": "ctrl_pressed_recent",
                                     "value": 0
                                 }
                             }
@@ -96,17 +96,12 @@
             ]
         },
         {
-            "description": "shift(pressed alone) -> caps_lock",
+            "description": "shift(pressed alone) -> ctrl+option+space",
             "manipulators": [
                 {
                     "type": "basic",
                     "from": {
-                        "key_code": "left_shift",
-                        "modifiers": {
-                            "optional": [
-                                "any"
-                            ]
-                        }
+                        "key_code": "left_shift"
                     },
                     "to": [
                         {
@@ -115,19 +110,17 @@
                     ],
                     "to_if_alone": [
                         {
-                            "key_code": "caps_lock"
+                            "key_code": "spacebar",
+                            "modifiers": [
+                                "option"
+                            ]
                         }
                     ]
                 },
                 {
                     "type": "basic",
                     "from": {
-                        "key_code": "right_shift",
-                        "modifiers": {
-                            "optional": [
-                                "any"
-                            ]
-                        }
+                        "key_code": "right_shift"
                     },
                     "to": [
                         {
@@ -136,7 +129,10 @@
                     ],
                     "to_if_alone": [
                         {
-                            "key_code": "caps_lock"
+                            "key_code": "spacebar",
+                            "modifiers": [
+                                "option"
+                            ]
                         }
                     ]
                 }
