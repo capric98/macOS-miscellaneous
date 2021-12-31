@@ -8,7 +8,7 @@ if has("autocmd")
   au BufReadPost * if line("'\"") > 1 && line("'\"") <= line("$") | exe "normal! g'\"" | endif
 endif
 
-# sudo save
+" sudo save
 cnoremap w!! call SudoSaveFile()
 function! SudoSaveFile() abort
   execute (has('gui_running') ? '' : 'silent') 'write !env SUDO_EDITOR=tee sudo -e % >/dev/null'
