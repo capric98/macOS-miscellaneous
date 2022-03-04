@@ -57,7 +57,6 @@ export BASH_SILENCE_DEPRECATION_WARNING=1
 # export ALL_PROXY=http://172.16.0.3:1080
 
 # Android Studio
-export USER_HOME=/Users/YOUR_USER
-export ANDROID_HOME=${USER_HOME}/Library/Android/sdk
-export ANDROID_SDK_ROOT=${USER_HOME}/Library/Android/sdk
-export ANDROID_AVD_HOME=${USER_HOME}/.android/avd
+export ANDROID_HOME=${HOME}/Library/Android/sdk
+export ANDROID_SDK_ROOT=${HOME}/Library/Android/sdk
+export ANDROID_AVD_HOME=${HOME}/.android/avd
