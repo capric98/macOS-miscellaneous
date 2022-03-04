@@ -13,11 +13,23 @@ PS1='╭${debian_chroot:+()}\[\e[1;31m\]\u\[\e[1;33m\]@\[\e[1;36m\]\h \[\e[1;33m
 
 export CLICOLOR=1
 export LSCOLORS=GxFxCxDxBxegedabagaced
+alias ls='ls -F'
 alias ll='ls -l'
 alias l='ls -lA'
 alias pip=pip3
 alias lsblk='diskutil list'
 alias unmount='diskutil unmount'
+
+function wrap_netstat() {
+    if [[ "$@" == "-tunlp" ]]; then
+        sudo lsof -i -P | grep LISTEN | grep :$PORT
+    else
+        netstat $@
+    fi
+}
+alias netstat='wrap_netstat'
+
+alias reinstall-clash='brew reinstall --no-quarantine clash-for-windows'
 
 # Use Touch ID to sudo:
 if ! [[ `cat /etc/pam.d/sudo` == *"pam_tid.so"* ]]; then
@@ -42,3 +54,10 @@ cdf () {
 
 export BASH_SILENCE_DEPRECATION_WARNING=1
 # export ALL_PROXY=http://127.0.0.1:1080
+# export ALL_PROXY=http://172.16.0.3:1080
+
+# Android Studio
+export USER_HOME=/Users/YOUR_USER
+export ANDROID_HOME=${USER_HOME}/Library/Android/sdk
+export ANDROID_SDK_ROOT=${USER_HOME}/Library/Android/sdk
+export ANDROID_AVD_HOME=${USER_HOME}/.android/avd
