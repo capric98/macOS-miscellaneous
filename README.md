@@ -9,6 +9,6 @@
 
 ## Awesome Softwares
 * Bartender 4
-* BetterSnapTool(App Store) | Cinch
+* BetterSnapTool(App Store) | Cinch ｜ magnet
 * [AltTab](https://alt-tab-macos.netlify.app/)
 * [SteelSeries ExactMouse Tool](https://downloads.steelseriescdn.com/drivers/tools/steelseries-exactmouse-tool.dmg)
