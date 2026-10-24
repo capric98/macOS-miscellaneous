@@ -1,0 +1,69 @@
+# Interactive settings must not affect scripts or remote non-interactive commands.
+[[ $- == *i* ]] || return 0
+
+export BASH_SILENCE_DEPRECATION_WARNING=1
+export HOMEBREW_NO_ENV_HINTS=1
+export HOMEBREW_NO_UPGRADE_AUTO_UPDATES_CASKS=1
+
+# Also support interactive shells that do not read .bash_profile.
+if [[ ! ${HOMEBREW_PREFIX-} && -x /opt/homebrew/bin/brew ]]; then
+    eval "$(/opt/homebrew/bin/brew shellenv bash)"
+fi
+
+# ffmpeg-full is keg-only: expose it without forcing Homebrew links.
+if [[ -n ${HOMEBREW_PREFIX-} && -d $HOMEBREW_PREFIX/opt/ffmpeg-full/bin ]]; then
+    case ":$PATH:" in
+        *":$HOMEBREW_PREFIX/opt/ffmpeg-full/bin:"*) ;;
+        *) export PATH="$HOMEBREW_PREFIX/opt/ffmpeg-full/bin:$PATH" ;;
+    esac
+fi
+
+if (( BASH_VERSINFO[0] >= 4 )) && [[ -r $HOME/.local/share/blesh/ble.sh ]] && [[ ! ${BLE_VERSION-} ]]; then
+    source -- "$HOME/.local/share/blesh/ble.sh" --attach=none
+fi
+
+if command -v gdircolors >/dev/null 2>&1 && [[ -r $HOME/.config/dircolors-solarized/dircolors.ansi-light ]]; then
+    eval "$(gdircolors -b "$HOME/.config/dircolors-solarized/dircolors.ansi-light")"
+fi
+export LS_OPTIONS='--color=auto'
+if command -v gls >/dev/null 2>&1; then
+    alias ls='gls --color=auto'
+else
+    export CLICOLOR=1
+fi
+alias ll='ls -l'
+alias l='ls -lA'
+alias python=python3
+alias pip=pip3
+
+PS1='${debian_chroot:+()}\[\e[1;31m\]\u\[\e[1;33m\]@\[\e[1;36m\]\h \[\e[1;33m\]\w \[\e[1;35m\]\$ \[\e[0m\]'
+
+if (( BASH_VERSINFO[0] >= 4 )) && [[ -n ${HOMEBREW_PREFIX-} && -r $HOMEBREW_PREFIX/etc/profile.d/bash_completion.sh ]]; then
+    source "$HOMEBREW_PREFIX/etc/profile.d/bash_completion.sh"
+fi
+if command -v zoxide >/dev/null 2>&1; then
+    eval "$(zoxide init bash --cmd cd)"
+fi
+
+# cdf <-> open .
+cdf() {
+    local target
+    target=$(osascript -e 'tell application "Finder"
+        if (count of windows) > 0 then
+            get POSIX path of (target of window 1 as alias)
+        else
+            get POSIX path of (desktop as alias)
+        end if
+    end tell' 2>/dev/null)
+
+    if [[ -d $target ]]; then
+        cd "$target" && pwd
+    else
+        echo '无法获取 Finder 路径' >&2
+        return 1
+    fi
+}
+
+# Private paths, proxy settings and credentials belong in this local-only file.
+[[ ! -r $HOME/.bashrc.local ]] || source "$HOME/.bashrc.local"
+[[ ! ${BLE_VERSION-} ]] || ble-attach

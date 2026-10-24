@@ -1,0 +1,19 @@
+set mouse-=a
+set autoindent
+set smartindent
+set tabstop=4
+set shiftwidth=4
+set expandtab
+syntax on
+
+" Remember Cursor
+if has("autocmd")
+  au BufReadPost * if line("'\"") > 1 && line("'\"") <= line("$") | exe "normal! g'\"" | endif
+endif
+" Sudo Save
+command W :execute ':silent w !sudo tee % > /dev/null' | :edit!
+
+call plug#begin('~/.vim/plugged')
+Plug 'altercation/vim-colors-solarized'
+Plug 'vim-autoformat/vim-autoformat'
+call plug#end()

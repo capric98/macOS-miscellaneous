@@ -1,0 +1,35 @@
+# Review this file before running setup.sh. Snapshot: 2026-10-24.
+# Formulae: installed_on_request; dependency-only packages are omitted.
+# Required by the setup: bash, bash-completion@2, coreutils, gawk, zoxide.
+
+brew "bash"
+brew "bash-completion@2"
+brew "cloc"
+brew "coreutils"
+brew "ffmpeg-full"
+brew "gawk"
+brew "mactop"
+brew "python@3.15"
+brew "ripgrep"
+brew "uv"
+brew "yt-dlp"
+brew "zoxide"
+
+# Casks: all currently installed applications and fonts.
+cask "appcleaner"
+cask "betterdisplay"
+cask "clash-verge-rev"
+cask "claude-code@latest"
+cask "codex"
+cask "font-fira-code"
+cask "font-fira-code-nerd-font"
+cask "font-source-sans-3"
+cask "input-source-pro"
+cask "iterm2"
+cask "karabiner-elements"
+cask "keepassxc"
+cask "obsidian"
+cask "onyx"
+cask "rustdesk"
+cask "stats"
+cask "visual-studio-code"

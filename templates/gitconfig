@@ -1,0 +1,5 @@
+# Optional template. Set your identity locally with git config --global.
+[credential]
+    helper = osxkeychain
+[pull]
+    rebase = false

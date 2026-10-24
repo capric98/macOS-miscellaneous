@@ -1,0 +1,13 @@
+bleopt highlight_syntax=
+bleopt highlight_filename=
+bleopt highlight_variable=
+
+ble-face -s auto_complete fg=252,bg=none
+
+# no exit status
+# eg. [ble: exit code 127]
+bleopt exec_errexit_mark=
+
+# no elapsed time
+# eg. [ble: elapsed 27.399s (CPU 39.7%)]
+bleopt exec_elapsed_mark=

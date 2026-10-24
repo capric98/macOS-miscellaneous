@@ -29,3 +29,27 @@ realesrgan-ncnn-vulkan-macos
 *.webp
 *.gif
 *.jpeg
+
+# Machine-local configuration, credentials, raw exports and installer output.
+/local/
+/private/
+/backups/
+/.local/
+/.config/
+/.ssh/
+/.bashrc.local
+/.bash_profile.local
+/.gitconfig.local
+/.bash_profile
+/.bashrc
+/.blerc
+/.vimrc
+/.gitconfig
+/.git-credentials
+/karabiner.json
+/.env
+/.env.*
+!/.env.example
+*.log
+__pycache__/
+*.pyc
