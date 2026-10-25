@@ -41,7 +41,7 @@ bash setup.sh
 
 | 文件 | 内容 |
 | --- | --- |
-| `custom_shortcuts.json` | 11 条自定义规则，包含左 Option+E / D / L；已移除标题和文件名中的个人账号 |
+| `custom_shortcuts.json` | 12 条自定义规则，包含左 Option+E / D / L 和工作区切换；已移除标题和文件名中的个人账号 |
 | `windows_shortcuts_on_macos.json` | 31 条 Windows 风格快捷键 |
 
 Windows 风格的三个常用组合键按**键盘位置**使用左 Option（Alt）对应 Win 键，即 Mac 键盘左 Control 旁边的键。标准 PC 键盘上的实体 Win 键通常识别为 Command，两者的键码不同。
@@ -55,6 +55,10 @@ Windows 风格的三个常用组合键按**键盘位置**使用左 Option（Alt�
 将更新后的 `custom_shortcuts.json` 复制到 `~/.config/karabiner/assets/complex_modifications/`，在 Karabiner 的 **Complex Modifications > Add predefined rule** 中单独启用这三条。已启用的规则不会随仓库文件自动更新；先移除旧的 `Option + E to open Finder`，再添加新的 E / D / L 规则。无需为此重跑整个安装脚本。
 
 三条规则允许 Caps Lock 开启；带 Shift、Command 或 Control 的组合不匹配，右 Option 不受影响。沿用 Windows 规则中的远程桌面和虚拟机排除列表，让这些应用自行处理快捷键。显示桌面使用 macOS 的 Command–Mission Control，锁屏使用 `Ctrl+Cmd+Q`，见 [Apple 快捷键说明](https://support.apple.com/zh-cn/102650)。
+
+工作区切换：启用 `Ctrl+Left Option+Left/Right => Switch Desktop (Ctrl+Win+Left/Right)`，使用 **Control+左 Option+← / →** 切换上一个／下一个桌面。规则发送 macOS 原生的 `Control+← / →`；需在系统设置 > 键盘 > 键盘快捷键 > 调度中心中启用“向左移动一个空间”和“向右移动一个空间”，并保持其快捷键为 Control+左右方向键。先在调度中心创建多个桌面，或使用全屏应用形成的空间。
+
+工作区规则支持左右 Control、允许 Caps Lock，沿用远程桌面和虚拟机排除列表。已有 Control+左右按词移动规则保持不变；Karabiner 输出的按键不会再次经过这些规则。
 
 已移除标题为 `Ctrl+Tab => Cmd+Tab (Switch application)` 的旧规则；该规则实际匹配 Option+Tab / Option+Shift+Tab，删除后由应用自行处理。
 
