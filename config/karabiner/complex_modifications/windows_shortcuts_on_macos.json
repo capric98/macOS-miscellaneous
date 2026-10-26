@@ -1150,21 +1150,15 @@
       ]
     },
     {
-      "description": "Ctrl+T => Cmd+T (New tab)",
+      "description": "Ctrl+T => Cmd+T (Chrome / Terminal / iTerm2); Ctrl+Shift+T => Cmd+Shift+T (Chrome)",
       "manipulators": [
         {
           "conditions": [
             {
               "bundle_identifiers": [
-                "^org\\.macports\\.X11$",
-                "^com\\.apple\\.Terminal$",
-                "^com\\.googlecode\\.iterm2$",
-                "^co\\.zeit\\.hyper$",
-                "^org\\.virtualbox\\.app\\.VirtualBoxVM$",
-                "^com\\.microsoft\\.rdc\\.macos$",
-                "^tv\\.parsec\\.www$"
+                "^com\\.google\\.Chrome(\\.(beta|dev|canary))?$"
               ],
-              "type": "frontmost_application_unless"
+              "type": "frontmost_application_if"
             }
           ],
           "from": {
@@ -1174,7 +1168,39 @@
                 "control"
               ],
               "optional": [
-                "any"
+                "shift",
+                "caps_lock"
+              ]
+            }
+          },
+          "to": [
+            {
+              "key_code": "t",
+              "modifiers": [
+                "command"
+              ]
+            }
+          ],
+          "type": "basic"
+        },
+        {
+          "conditions": [
+            {
+              "bundle_identifiers": [
+                "^com\\.apple\\.Terminal$",
+                "^com\\.googlecode\\.iterm2$"
+              ],
+              "type": "frontmost_application_if"
+            }
+          ],
+          "from": {
+            "key_code": "t",
+            "modifiers": {
+              "mandatory": [
+                "control"
+              ],
+              "optional": [
+                "caps_lock"
               ]
             }
           },
@@ -1912,9 +1938,18 @@
       ]
     },
     {
-      "description": "Ctrl+Left Click => Cmd+Left Click (select multiple items)",
+      "description": "Chrome / Finder: Ctrl+(Shift)+Left Click => Cmd+(Shift)+Left Click",
       "manipulators": [
         {
+          "conditions": [
+            {
+              "bundle_identifiers": [
+                "^com\\.google\\.Chrome(\\.(beta|dev|canary))?$",
+                "^com\\.apple\\.finder$"
+              ],
+              "type": "frontmost_application_if"
+            }
+          ],
           "from": {
             "pointing_button": "button1",
             "modifiers": {
@@ -1922,7 +1957,8 @@
                 "control"
               ],
               "optional": [
-                "any"
+                "shift",
+                "caps_lock"
               ]
             }
           },

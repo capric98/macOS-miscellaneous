@@ -64,6 +64,21 @@ Windows 风格的三个常用组合键按**键盘位置**使用左 Option（Alt�
 
 Windows 规则文件中仍保留旧的 `Cmd+L => Logout (CGSession -suspend)`，它与左 Option+L 不同；建议禁用旧规则，避免占用应用原本的 Command+L（如浏览器地址栏）。
 
+Chrome 标签页和鼠标操作，以及终端新建标签页（`windows_shortcuts_on_macos.json`）：
+
+| 按键 | 发送给应用的组合 | 功能 |
+| --- | --- | --- |
+| `Ctrl+T` | `Cmd+T` | 在 Chrome、系统 Terminal 和 iTerm2 中新建标签页 |
+| `Ctrl+Shift+T` | `Cmd+Shift+T` | 恢复刚关闭的标签页，可连续恢复 |
+| `Ctrl+左键` | `Cmd+左键` | 在后台新标签页打开链接 |
+| `Ctrl+Shift+左键` | `Cmd+Shift+左键` | 在新标签页打开链接并切换过去 |
+
+Ctrl+T 在 Chrome（含 Beta、Dev、Canary）、系统 Terminal 和 iTerm2 中生效；Ctrl+Shift+T 仍仅在 Chrome 中生效。鼠标规则限定 Chrome 和 Finder，在 Finder 中保留 Command 点击的多选行为。规则支持左右 Control 和 Caps Lock；Chrome 的标签页规则及点击规则也保留左右 Shift，终端规则不匹配带 Shift 的组合。额外按住 Option 或 Command 时均不匹配。点击规则作用于这些应用中的左键事件，Karabiner 不判断点击位置是否是链接。
+
+将更新后的 `windows_shortcuts_on_macos.json` 复制到 `~/.config/karabiner/assets/complex_modifications/`，在 **Complex Modifications** 中移除已启用的旧 `Ctrl+T => Cmd+T (New tab)` 和 `Ctrl+Left Click => Cmd+Left Click (select multiple items)`（若存在），再从 **Add predefined rule** 添加 `Ctrl+T => Cmd+T (Chrome / Terminal / iTerm2); Ctrl+Shift+T => Cmd+Shift+T (Chrome)` 和 `Chrome / Finder: Ctrl+(Shift)+Left Click => Cmd+(Shift)+Left Click`。替换规则文件不会自动更新已启用规则，无需重跑整个安装脚本。新增的 Ctrl+T 输出不会再次触发全局 `Smart Cmd+T for iTerm2` 规则。
+
+鼠标操作还需在 Karabiner **Devices** 中为实际使用的鼠标开启 **Modify events**；鼠标默认不参与映射，仅启用规则并不足以生效。只开启所用鼠标，不必全局启用所有鼠标。更换鼠标后需为新设备开启；设备标识留在本机，不写入公共规则。Chrome 原生组合见 [Google 快捷键说明](https://support.google.com/chrome/answer/157179?hl=zh-Hans)，鼠标设置见 [Karabiner 官方说明](https://karabiner-elements.pqrs.org/docs/help/how-to/mouse-button/)。
+
 ## 备份、重跑与个人信息
 
 不同内容的现有配置会先备份到 `~/.local/state/macos-setup/backups/<时间>-<进程号>/`，按原相对路径保存。内容相同的文件会跳过；重复运行不会追加重复的 shell 配置或规则。安装失败可修复后重跑，已经安装的软件不需要重新安装。备份仅在本机，不放入仓库。
