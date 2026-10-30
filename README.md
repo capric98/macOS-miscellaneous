@@ -42,7 +42,7 @@ bash setup.sh
 | 文件 | 内容 |
 | --- | --- |
 | `custom_shortcuts.json` | 12 条自定义规则，包含左 Option+E / D / L 和工作区切换；已移除标题和文件名中的个人账号 |
-| `windows_shortcuts_on_macos.json` | 29 条 Windows 风格快捷键 |
+| `windows_shortcuts_on_macos.json` | 30 条 Windows 风格快捷键 |
 
 Windows 风格的三个常用组合键按**键盘位置**使用左 Option（Alt）对应 Win 键，即 Mac 键盘左 Control 旁边的键。标准 PC 键盘上的实体 Win 键通常识别为 Command，两者的键码不同。
 
@@ -69,6 +69,12 @@ Finder 中已移除 `Return => Cmd+o (Open)`、`Delete => Cmd+backspace (Delete)
 新增 `Shift+Delete => Cmd+backspace (Move to Trash) (Only in Finder)`：在 Finder 中按左右任一 Shift 加向前删除键（Delete），将所选项目移到废纸篓；允许 Caps Lock。Karabiner 发送 `Cmd+Backspace` 时不带 Shift，不会变成清倒废纸篓的 `Shift+Cmd+Backspace`。这条规则同样只判断前台应用，重命名时按 Shift+Delete 也会发送 `Cmd+Backspace`。
 
 将更新后的 `windows_shortcuts_on_macos.json` 复制到 `~/.config/karabiner/assets/complex_modifications/`，在 **Complex Modifications** 中移除上述三条旧规则，再从 **Add predefined rule** 添加 Shift+Delete 规则。
+
+Finder 剪切移动：启用 `Finder: Ctrl+X, Ctrl+V => Cut and paste files (Cmd+C, Cmd+Option+V)`。Finder 不能剪切文件，因此在 Finder 中按 Ctrl+X 会发送 `Cmd+C`，并用变量 `finder_cut_pending` 记下待移动状态；之后在 Finder 中按 Ctrl+V 发送 macOS 原生的 `Cmd+Option+V`，将项目移到当前文件夹并清除状态。没有待移动状态时，Ctrl+V 仍是普通粘贴。在 Finder 中按 Ctrl+C，或在任意应用中按 `Cmd+C` / `Cmd+X`，都会清除状态。规则支持左右 Control、允许 Caps Lock，带其他修饰键的组合交给原有规则。
+
+Karabiner 读不到剪贴板，也不区分是否正在重命名。重命名时按 Ctrl+X 只会复制文字，此时改用 `Cmd+X` / `Cmd+V`。按 Ctrl+X 后若通过右键菜单复制或拖拽，状态不会清除，下一次 Ctrl+V 会移动剪贴板中的原文件；移错时可用 Ctrl+Z 撤销。
+
+将更新后的 `windows_shortcuts_on_macos.json` 复制到 `~/.config/karabiner/assets/complex_modifications/`，从 **Add predefined rule** 添加该规则，并确认它在列表中位于 `Ctrl+C, Ctrl+V, Ctrl+X => Cmd+C (Copy), Cmd+V (Paste), Cmd+X (Cut)` 之前。Karabiner 只执行列表中第一条匹配的规则，见 [官方优先级说明](https://karabiner-elements.pqrs.org/docs/json/complex-modifications-manipulator-evaluation-priority/)。
 
 Chrome 标签页和鼠标操作，以及终端新建标签页（`windows_shortcuts_on_macos.json`）：
 
