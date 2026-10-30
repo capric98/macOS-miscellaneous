@@ -42,7 +42,7 @@ bash setup.sh
 | 文件 | 内容 |
 | --- | --- |
 | `custom_shortcuts.json` | 12 条自定义规则，包含左 Option+E / D / L 和工作区切换；已移除标题和文件名中的个人账号 |
-| `windows_shortcuts_on_macos.json` | 31 条 Windows 风格快捷键 |
+| `windows_shortcuts_on_macos.json` | 29 条 Windows 风格快捷键 |
 
 Windows 风格的三个常用组合键按**键盘位置**使用左 Option（Alt）对应 Win 键，即 Mac 键盘左 Control 旁边的键。标准 PC 键盘上的实体 Win 键通常识别为 Command，两者的键码不同。
 
@@ -63,6 +63,12 @@ Windows 风格的三个常用组合键按**键盘位置**使用左 Option（Alt�
 已移除标题为 `Ctrl+Tab => Cmd+Tab (Switch application)` 的旧规则；该规则实际匹配 Option+Tab / Option+Shift+Tab，删除后由应用自行处理。
 
 Windows 规则文件中仍保留旧的 `Cmd+L => Logout (CGSession -suspend)`，它与左 Option+L 不同；建议禁用旧规则，避免占用应用原本的 Command+L（如浏览器地址栏）。
+
+Finder 中已移除 `Return => Cmd+o (Open)`、`Delete => Cmd+backspace (Delete)` 和 `Backspace => Cmd+up (Go back)` 三条规则。它们只判断前台应用是否为 Finder，重命名输入时也会触发，例如按 Backspace 会跳到上一级文件夹。Return、Backspace 和 Delete 现在恢复 Finder 原生行为：打开用 `Cmd+O` 或 `Cmd+↓`，返回上一级用 `Cmd+↑`；`F2 => Return (Rename)` 保持不变。
+
+新增 `Shift+Delete => Cmd+backspace (Move to Trash) (Only in Finder)`：在 Finder 中按左右任一 Shift 加向前删除键（Delete），将所选项目移到废纸篓；允许 Caps Lock。Karabiner 发送 `Cmd+Backspace` 时不带 Shift，不会变成清倒废纸篓的 `Shift+Cmd+Backspace`。这条规则同样只判断前台应用，重命名时按 Shift+Delete 也会发送 `Cmd+Backspace`。
+
+将更新后的 `windows_shortcuts_on_macos.json` 复制到 `~/.config/karabiner/assets/complex_modifications/`，在 **Complex Modifications** 中移除上述三条旧规则，再从 **Add predefined rule** 添加 Shift+Delete 规则。
 
 Chrome 标签页和鼠标操作，以及终端新建标签页（`windows_shortcuts_on_macos.json`）：
 
