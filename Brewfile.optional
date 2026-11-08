@@ -1,0 +1,11 @@
+# Optional group: install only after a separate interactive confirmation.
+# Keep these outside Brewfile so --yes never selects them automatically.
+tap "flameshot-org/flameshot"
+tap "capric98/mpv-app"
+
+cask "flameshot-org/flameshot/flameshot-org-flameshot"
+cask "capric98/mpv-app/mpv-app"
+
+# Text fonts for ModernZ and the statistics overlay; keep binaries out of Git.
+cask "font-source-han-sans-vf"
+cask "font-fira-code-nerd-font"

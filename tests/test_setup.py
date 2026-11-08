@@ -27,13 +27,23 @@ class SetupTests(unittest.TestCase):
             self.env.pop(key, None)
         self.env.update(HOME=str(self.home), SETUP_SCRIPT=str(ROOT / "setup.sh"))
 
-    def shell(self, code, *, success=True):
-        result = subprocess.run(
-            ["/bin/bash", "--noprofile", "--norc", "-c",
-             'source "$SETUP_SCRIPT"\n' + code],
-            env=self.env, cwd=self.base, stdin=subprocess.DEVNULL,
-            text=True, capture_output=True,
-        )
+    def shell(self, code, *, success=True, answer=None):
+        master = slave = None
+        try:
+            if answer is not None:
+                master, slave = os.openpty()
+                os.write(master, answer.encode())
+            result = subprocess.run(
+                ["/bin/bash", "--noprofile", "--norc", "-c",
+                 'source "$SETUP_SCRIPT"\n' + code],
+                env=self.env, cwd=self.base,
+                stdin=slave if slave is not None else subprocess.DEVNULL,
+                text=True, capture_output=True, timeout=30,
+            )
+        finally:
+            if master is not None:
+                os.close(master)
+                os.close(slave)
         if success:
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         else:
@@ -58,6 +68,45 @@ main --dry-run
 
     def test_unknown_option_is_rejected(self):
         self.shell("main --unknown", success=False)
+        self.assertEqual(list(self.home.iterdir()), [])
+
+    def test_optional_dry_run_has_no_external_actions(self):
+        result = self.shell("""
+preflight() { exit 91; }
+setup_optional() { exit 92; }
+main --optional-only --dry-run
+""")
+        self.assertIn((ROOT / "Brewfile.optional").read_text(), result.stdout)
+        self.assertNotIn('brew "bash"', result.stdout)
+        self.assertEqual(list(self.home.iterdir()), [])
+
+    def test_optional_selection_cannot_be_implied_by_yes(self):
+        result = self.shell("""
+preflight() { :; }
+find_brew() { exit 91; }
+main --optional-only --yes
+""")
+        self.assertIn("非交互运行：跳过可选软件组", result.stdout)
+        self.assertEqual(list(self.home.iterdir()), [])
+
+    def test_optional_default_and_decline_make_no_changes(self):
+        for answer in ("\n", "n\n"):
+            with self.subTest(answer=answer):
+                result = self.shell("""
+preflight() { :; }
+find_brew() { exit 91; }
+main --optional-only --yes
+""", answer=answer)
+                self.assertIn("已跳过可选软件组", result.stdout)
+                self.assertEqual(list(self.home.iterdir()), [])
+
+    def test_skip_optional_never_prompts_or_installs(self):
+        self.shell("""
+SKIP_OPTIONAL=1
+confirm_optional() { exit 91; }
+setup_optional
+""")
+        self.shell("main --optional-only --skip-optional", success=False)
         self.assertEqual(list(self.home.iterdir()), [])
 
     def test_unreviewed_noninteractive_install_is_rejected(self):
@@ -210,6 +259,7 @@ case $1 in
   shellenv) printf 'export HOMEBREW_PREFIX=%q\nexport PATH=%q:$PATH\n' "$FAKE_PREFIX" "$FAKE_PREFIX/bin" ;;
   --prefix) printf '%s\n' "$FAKE_PREFIX" ;;
   bundle) [[ ${FAIL_BUNDLE:-0} != 1 ]] || exit 37 ;;
+  tap|trust|help) : ;;
   *) exit 96 ;;
 esac
 """,
@@ -270,6 +320,75 @@ main --yes --no-change-shell
         self.assertIn("bundle install --no-upgrade --file", calls)
         self.assertIn("PlugInstall --sync", calls)
         self.assertTrue((self.home / ".local/share/blesh/ble.sh").exists())
+        self.assertFalse((self.home / ".config/mpv").exists())
+        self.assertFalse((self.home / ".config/flameshot").exists())
+
+    def optional_install_script(self):
+        script = self.prepare_fake_install().replace(
+            "main --yes --no-change-shell", "main --optional-only"
+        )
+        return 'pgrep() { return 1; }\n' + script
+
+    def test_optional_group_installs_both_and_preserves_other_configs(self):
+        script = self.optional_install_script()
+        mpv = self.home / ".config/mpv"
+        (mpv / "scripts").mkdir(parents=True)
+        (mpv / "input.conf").write_text("old bindings\n")
+        private = mpv / "scripts/private.lua"
+        private.write_text("-- user script\n")
+        self.shell(script, answer="y\n")
+        for source in (ROOT / "config/mpv").rglob("*"):
+            if source.is_file():
+                self.assertEqual((mpv / source.relative_to(ROOT / "config/mpv")).read_bytes(),
+                                 source.read_bytes())
+        self.assertEqual(private.read_text(), "-- user script\n")
+        flameshot = self.home / ".config/flameshot/flameshot.ini"
+        config = flameshot.read_text()
+        self.assertIn('savePath="' + str(self.home) + '/Pictures/ScreenShots/"', config)
+        self.assertIn("showHelp=false", config)
+        self.assertIn("TAKE_SCREENSHOT=Meta+Ctrl+A", config)
+        self.assertNotIn("__SCREENSHOT_DIR__", config)
+        self.assertTrue((self.home / "Pictures/ScreenShots").is_dir())
+        backups = list(self.home.glob(".local/state/macos-setup/backups/*"))
+        self.assertEqual(len(backups), 1)
+        self.assertEqual((backups[0] / ".config/mpv/input.conf").read_text(), "old bindings\n")
+        modified = flameshot.stat().st_mtime_ns
+        self.shell(script, answer="yes\n")
+        self.assertEqual(flameshot.stat().st_mtime_ns, modified)
+        self.assertEqual(list(self.home.glob(".local/state/macos-setup/backups/*")), backups)
+        calls = (self.base / "calls").read_text()
+        self.assertIn("tap capric98/mpv-app", calls)
+        self.assertIn("tap flameshot-org/flameshot", calls)
+        self.assertIn("trust --cask flameshot-org/flameshot/flameshot-org-flameshot capric98/mpv-app/mpv-app", calls)
+        self.assertIn("bundle install --no-upgrade --file " + str(ROOT / "Brewfile.optional"), calls)
+        self.assertFalse((self.home / ".bashrc").exists())
+
+    def test_optional_package_failure_does_not_import_configs(self):
+        script = self.optional_install_script()
+        self.env["FAIL_BUNDLE"] = "1"
+        self.shell(script, answer="y\n", success=False)
+        self.assertFalse((self.home / ".config").exists())
+
+    def test_optional_running_app_stops_before_install(self):
+        self.shell("""
+preflight() { :; }
+pgrep() { return 0; }
+find_brew() { exit 91; }
+main --optional-only
+""", answer="y\n", success=False)
+        self.assertEqual(list(self.home.iterdir()), [])
+
+    def test_optional_skip_packages_only_imports_for_installed_apps(self):
+        self.shell("""
+preflight() { :; }
+pgrep() { return 1; }
+mpv_installed() { return 0; }
+flameshot_installed() { return 1; }
+find_brew() { exit 91; }
+main --optional-only --skip-packages
+""", answer="y\n")
+        self.assertTrue((self.home / ".config/mpv/scripts/modernz.lua").exists())
+        self.assertFalse((self.home / ".config/flameshot").exists())
 
     def test_package_failure_stops_before_config_is_replaced(self):
         script = self.prepare_fake_install()

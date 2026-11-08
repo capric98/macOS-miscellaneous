@@ -29,7 +29,26 @@ bash setup.sh
 - 原样部署当前 `~/.vimrc`，安装固定提交的 vim-plug，并用 `vim -N` 关闭批处理时的 vi 兼容模式，再同步执行 `PlugInstall --sync`，随后检查两个插件的文件是否存在。
 - 安装 Karabiner 后，将两个规则文件放入 `~/.config/karabiner/assets/complex_modifications/`。不替换 `karabiner.json` 中已有的设备信息和已启用规则。
 
-脚本不会安装旧的 aria2 / Helix / Flameshot 配置。软件清单已按审核决定移除 Flameshot、Shottr 和标准版 `ffmpeg`，仅保留 `ffmpeg-full`。脚本不会卸载当前机器上的软件。
+脚本不会安装旧的 aria2 / Helix 配置。默认软件清单保留 `ffmpeg-full`，不含标准版 `ffmpeg`、Shottr、mpv 和 Flameshot。脚本不会卸载当前机器上的软件。
+
+## 可选软件组：mpv + Flameshot
+
+`Brewfile.optional` 保存这一组可选软件及 mpv 主题、统计面板所需字体。普通安装会额外询问一次，默认 `[y/N]` 为跳过；只有输入 `y` 才会一起安装 mpv、Flameshot 并导入两者配置。`--yes` 只跳过默认清单确认，不替代可选组确认；非交互运行自动跳过可选组。可用 `--skip-optional` 完全跳过这一步。
+
+以后需要时，先退出 mpv 和 Flameshot，再在完整仓库中运行：
+
+```bash
+bash setup.sh --optional-only --dry-run  # 查看可选清单和导入操作
+bash setup.sh --optional-only           # 只处理可选组，仍需输入 y
+```
+
+这个入口要求已安装 `/opt/homebrew`，不执行 Bash、Vim、Karabiner 或登录 shell 配置。安装使用 `brew bundle install --no-upgrade`，不主动升级已安装项目。已手动放入 Applications、尚未由 Homebrew 管理的同名应用可能产生文件冲突，请先自行处理；脚本不会强制接管或删除它们。`--optional-only --skip-packages` 仍会询问，只为已安装的应用导入配置，不添加 tap、信任或安装软件。
+
+- Flameshot 使用官方 tap 的 `flameshot-org/flameshot/flameshot-org-flameshot`，保留当前工具栏、颜色、透明度、PNG、`Ctrl+Cmd+A`、`showHelp=false` 和 `startupLaunch=true`。源文件中的截图目录使用占位符，导入时替换为当前用户的 `~/Pictures/ScreenShots/` 并创建目录。
+- mpv 沿用本机的 `capric98/mpv-app/mpv-app`，由个人维护的 tap 安装 mpv 项目发布的完整 `mpv.app`，不安装 Homebrew `mpv` formula。保存了当前 `mpv.conf`、`input.conf`、两个脚本选项文件、ModernZ v0.3.3 脚本及约 50 KiB 的主题专用图标字体。中文字体由 Homebrew 的 `font-source-han-sans-vf` 安装，ModernZ 与统计面板统一使用 `Source Han Sans SC VF Medium`；统计面板的等宽字体由 `font-fira-code-nerd-font` 提供。仓库不保存思源黑体二进制文件。保留 compact OSC、标题字号，以及无边框、硬件解码、`gpu-next` 和 high-quality 等播放设置。使用 `--skip-packages` 时，需要本机已有上述字体。
+- 保留的 mpv 快捷键包括：D / F（含大写）和中英文逗号／句号逐帧后退／前进，Enter 全屏，Space 暂停，上下键调整音量，Tab 切换统计面板。
+
+导入时逐个备份不同的现有文件，内容相同则跳过；保留 mpv 目录中其他文件。若已有其他 OSC 脚本，需自行禁用以免与 ModernZ 同时显示。当前实例运行时脚本会提示退出后重试。导入后手动打开应用；Flameshot 的屏幕录制权限及开机启动是否生效需在本机确认。Homebrew 7 以上仅在用户选择可选组后信任清单中的两个第三方 cask；应用首次启动的系统确认仍由 macOS 处理。
 
 ## 安装后完成几步
 
@@ -115,6 +134,8 @@ git config --global credential.helper osxkeychain
 bash setup.sh --review-packages
 bash setup.sh --yes --skip-packages  # 已有 Homebrew 及核心工具时只配置
 bash setup.sh --no-change-shell
+bash setup.sh --optional-only          # 以后单独选择安装 mpv + Flameshot
+bash setup.sh --skip-optional          # 不询问可选组
 bash setup.sh --help
 ```
 
@@ -123,12 +144,15 @@ bash setup.sh --help
 ```text
 setup.sh                     单一安装入口
 Brewfile                     可人工审核的软件清单
+Brewfile.optional            单独确认的 mpv + Flameshot 和字体清单
 config/
   bash/                      Bash 启动文件和 blerc
   vim/                       当前 vimrc
   karabiner/complex_modifications/
   dircolors-solarized/        当前 ANSI Light 文件及上游许可证
   iterm2/                    Solarized Light 动态配置及上游许可证
+  flameshot/                 当前截图配置，截图目录在导入时替换
+  mpv/                       播放设置、快捷键、ModernZ OSC、图标字体及许可证
 templates/                   无个人身份的 Git、SSH 示例
 docs/homebrew-review.md       清单来源和审核重点
 docs/sources.md               上游来源、固定版本

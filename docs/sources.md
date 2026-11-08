@@ -11,4 +11,9 @@
 - Finder 按键：Windows 规则移除 Finder 中 Return 打开、Delete 移到废纸篓和 Backspace 返回上一级三条映射，避免重命名输入时被改写；新增 Shift+Delete 发送 Command+Delete 移到废纸篓。必选修饰键不会带入输出按键，见上述 Karabiner 修饰键说明；Finder 原生组合见 [Apple 快捷键说明](https://support.apple.com/zh-cn/102650)。
 - Finder 剪切移动：Finder 中 Ctrl+X 发送 Command+C 并设置变量，Ctrl+V 在变量为 1 时发送原生的 Command+Option+V 移动项目；Finder 中的 Ctrl+C 及任意应用中的 Command+C / Command+X 清除变量。变量用法见 [Karabiner set_variable 说明](https://karabiner-elements.pqrs.org/docs/json/complex-modifications-manipulator-definition/to/set-variable/)，规则须排在全局 Ctrl+C / V / X 规则之前，见 [规则优先级说明](https://karabiner-elements.pqrs.org/docs/json/complex-modifications-manipulator-evaluation-priority/)。
 
+- Flameshot：2026-11-07 从本机 `~/.config/flameshot/flameshot.ini` 保存配置，包含关闭截图帮助列表；仅将个人截图路径替换为导入时生成的目录。可选安装使用上游 [macOS Homebrew 说明](https://github.com/flameshot-org/flameshot#macos) 中的官方 tap 与完整 cask token，不放入默认 `Brewfile`。
+- mpv app：[capric98/homebrew-mpv-app](https://github.com/capric98/homebrew-mpv-app)，沿用本机安装的 `capric98/mpv-app/mpv-app`。该个人 tap 使用 [mpv 项目稳定版发布包](https://github.com/mpv-player/mpv/releases)，不会自动移除 quarantine。mpv 配置、快捷键和脚本选项从本机 `~/.config/mpv/` 原样保存。
+- ModernZ OSC：[Samillion/ModernZ v0.3.3](https://github.com/Samillion/ModernZ/tree/v0.3.3)，保存本机 `scripts/modernz.lua` 和 `fonts/modernz-icons.ttf`，不会在安装时下载更新版主题。脚本的 LGPL-2.1 许可证保存在 `config/mpv/licenses/`。
+- 中文及等宽字体：[Adobe Source Han Sans](https://github.com/adobe-fonts/source-han-sans) 的可变字体和 FiraCode Nerd Font 通过可选清单中的 `font-source-han-sans-vf`、`font-fira-code-nerd-font` 安装。ModernZ 和统计面板统一使用 `Source Han Sans SC VF Medium`，仓库仅保存主题专用的 `modernz-icons.ttf`，不打包思源黑体 OTF。
+
 后续修改固定下载版本时，须重新下载官方文件、核对版本并更新 SHA-256，不要关闭校验。Homebrew 安装的软件及 Vim 插件未完全锁定版本，因此该仓库复现的是配置和软件选择。

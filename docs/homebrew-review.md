@@ -32,16 +32,17 @@ Formula 候选使用 `brew list --formula --installed-on-request`，原始共 13
 已确认的选择：
 
 1. 只安装 `ffmpeg-full`，不安装标准版 `ffmpeg`；不使用强制链接，直接配置 PATH。
-2. 不安装 Flameshot 和 Shottr，也不迁移 Flameshot 配置。
+2. 默认清单不安装 Flameshot、mpv 和 Shottr。2026-11-07 起将 mpv + Flameshot 及相关字体保存到 `Brewfile.optional`；单独询问、默认跳过，选择后一起安装并导入配置。
 3. `claude-code@latest` 保留当前安装的通道名。
 
-最终清单没有第三方 tap。Flameshot 移除后不再需要其 tap；本机的另一个 tap 没有对应已安装软件，也不迁移。脚本不会卸载当前机器已有的软件或 tap。
+默认清单没有第三方 tap。可选组沿用本机完整 cask token：`flameshot-org/flameshot/flameshot-org-flameshot` 和 `capric98/mpv-app/mpv-app`，分别使用 Flameshot 官方 tap 和个人维护的 mpv app tap。选择可选组才会添加这两个 tap，并在 Homebrew 7 以上信任这两个 cask。mpv 使用完整应用包，不引入依赖标准版 `ffmpeg` 的 Homebrew `mpv` formula；附带思源黑体可变字体和 FiraCode Nerd Font，供当前统计面板使用。脚本不会卸载当前机器已有的软件或 tap。
 
 审核命令：
 
 ```bash
 bash setup.sh --review-packages
 bash setup.sh --dry-run
+bash setup.sh --optional-only --dry-run
 ```
 
 以后更新清单时，先查看 `brew list --formula --installed-on-request`、`brew list --cask` 和 `brew tap`。第三方软件应使用完整 token，可从 `brew info --json=v2 --installed` 的 `full_name` / `full_token` 核对；不要把原始 JSON 导出提交到仓库。

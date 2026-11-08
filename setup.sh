@@ -4,10 +4,15 @@ set -euo pipefail
 
 ROOT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 BREWFILE="$ROOT_DIR/Brewfile"
+OPTIONAL_BREWFILE="$ROOT_DIR/Brewfile.optional"
 DRY_RUN=0
 ASSUME_YES=0
 CHANGE_SHELL=1
 INSTALL_PACKAGES=1
+OPTIONAL_ONLY=0
+SKIP_OPTIONAL=0
+FLAMESHOT_CASK=flameshot-org/flameshot/flameshot-org-flameshot
+MPV_CASK=capric98/mpv-app/mpv-app
 BACKUP_DIR=
 WORK_DIR=
 BREW_BIN=
@@ -31,6 +36,8 @@ usage() {
   --yes                 表示已审核 Brewfile，跳过清单确认
   --skip-packages       跳过 Homebrew 软件安装，仍检查配置需要的工具
   --no-change-shell     不修改默认登录 shell，也不写 /etc/shells
+  --optional-only       仅询问是否安装 mpv + Flameshot 并导入配置
+  --skip-optional       跳过可选软件组的询问和配置
   -h, --help            显示帮助
 USAGE
 }
@@ -43,14 +50,21 @@ parse_args() {
             --yes) ASSUME_YES=1 ;;
             --skip-packages) INSTALL_PACKAGES=0 ;;
             --no-change-shell) CHANGE_SHELL=0 ;;
+            --optional-only) OPTIONAL_ONLY=1 ;;
+            --skip-optional) SKIP_OPTIONAL=1 ;;
             -h|--help) usage; exit 0 ;;
             *) usage >&2; die "未知参数：$1" ;;
         esac
         shift
     done
+    (( ! OPTIONAL_ONLY || ! SKIP_OPTIONAL )) || die '--optional-only 不能与 --skip-optional 同用。'
 }
 
 show_plan() {
+    if (( OPTIONAL_ONLY )); then
+        show_optional_plan
+        return 0
+    fi
     log '待审核的 Homebrew 安装清单：'
     cat "$BREWFILE"
     log '配置操作：'
@@ -70,6 +84,23 @@ show_plan() {
         printf '%s\n' '  注册 Homebrew Bash 并将其设为当前用户的登录 shell'
     fi
     printf '%s\n' '  Git 身份、SSH 密钥和 .local 覆盖文件由使用者在本机配置'
+    (( SKIP_OPTIONAL )) || show_optional_plan
+    return 0
+}
+
+show_optional_plan() {
+    log '可选软件组：mpv + Flameshot（单独询问，默认跳过；--yes 不代替确认）：'
+    cat "$OPTIONAL_BREWFILE"
+    if (( INSTALL_PACKAGES )); then
+        printf '%s\n' '  确认后添加上述 tap、信任其中两个 cask，再按可选清单安装；不主动升级'
+    else
+        printf '%s\n' '  --skip-packages：仅为已安装的应用导入配置，不安装软件或添加 tap'
+    fi
+    printf '%s\n' \
+        '  先退出 mpv 和 Flameshot；不同的现有配置会先备份' \
+        '  mpv：导入播放配置、快捷键、ModernZ 主题和图标字体；中文字体由 Homebrew 安装' \
+        '  Flameshot：保留 Ctrl+Cmd+A、showHelp=false、startupLaunch=true 和工具栏设置' \
+        '  截图目录使用当前用户的 ~/Pictures/ScreenShots/'
 }
 
 confirm_packages() {
@@ -217,6 +248,91 @@ install_configs() {
     install_file "$WORK_DIR/iterm2-profile.plist" "$HOME/Library/Application Support/iTerm2/DynamicProfiles/macos-setup.plist"
 }
 
+confirm_optional() {
+    [[ -t 0 ]] || { log '非交互运行：跳过可选软件组；需要时运行 bash setup.sh --optional-only。'; return 1; }
+    local answer
+    read -r -p '安装可选软件组 mpv + Flameshot 并导入两者配置？[y/N] ' answer || return 1
+    case $answer in
+        y|Y|yes|YES) return 0 ;;
+        *) log '已跳过可选软件组。'; return 1 ;;
+    esac
+}
+
+flameshot_installed() {
+    [[ -x /Applications/Flameshot.app/Contents/MacOS/flameshot ||
+       -x $HOME/Applications/Flameshot.app/Contents/MacOS/flameshot ]] ||
+        command -v flameshot >/dev/null 2>&1
+}
+
+mpv_installed() {
+    [[ -x /Applications/mpv.app/Contents/MacOS/mpv ||
+       -x $HOME/Applications/mpv.app/Contents/MacOS/mpv ]] ||
+        command -v mpv >/dev/null 2>&1
+}
+
+setup_optional() {
+    (( ! SKIP_OPTIONAL )) || return 0
+    confirm_optional || return 0
+    local app
+    for app in flameshot mpv; do
+        if pgrep -ix -u "$(id -u)" "$app" >/dev/null; then
+            die "请先退出 ${app}，再运行 bash setup.sh --optional-only，以免应用覆盖配置。"
+        fi
+    done
+    if (( INSTALL_PACKAGES )); then
+        find_brew || die '未找到 Homebrew；请先安装 Homebrew，再运行 bash setup.sh --optional-only。'
+        log '安装可选软件组 mpv + Flameshot'
+        "$BREW_BIN" tap flameshot-org/flameshot
+        "$BREW_BIN" tap capric98/mpv-app
+        # Homebrew 7+ requires explicit trust for third-party casks.
+        if "$BREW_BIN" help trust >/dev/null 2>&1; then
+            "$BREW_BIN" trust --cask "$FLAMESHOT_CASK" "$MPV_CASK"
+        fi
+        HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_BUNDLE_NO_UPGRADE=1 \
+            "$BREW_BIN" bundle install --no-upgrade --file "$OPTIONAL_BREWFILE"
+        # Bundle must finish before either application's configuration is changed.
+        install_mpv_config
+        install_flameshot_config
+    else
+        if mpv_installed; then
+            install_mpv_config
+        else
+            log '未安装 mpv；--skip-packages 下跳过其配置。'
+        fi
+        if flameshot_installed; then
+            install_flameshot_config
+        else
+            log '未安装 Flameshot；--skip-packages 下跳过其配置。'
+        fi
+    fi
+}
+
+install_mpv_config() {
+    local source relative
+    while IFS= read -r -d '' source; do
+        relative=${source#"$ROOT_DIR/config/mpv/"}
+        install_file "$source" "$HOME/.config/mpv/$relative"
+    done < <(find "$ROOT_DIR/config/mpv" -type f -print0)
+    log 'mpv 配置和 ModernZ 主题已导入，重新打开 mpv 后生效。'
+}
+
+install_flameshot_config() {
+    local screenshots="$HOME/Pictures/ScreenShots" ini_path line
+    # Quote the QSettings string so spaces, commas and semicolons stay literal.
+    ini_path=${screenshots//\\/\\\\}
+    ini_path=${ini_path//\"/\\\"}
+    while IFS= read -r line || [[ -n $line ]]; do
+        if [[ $line == 'savePath=__SCREENSHOT_DIR__' ]]; then
+            printf 'savePath="%s/"\n' "$ini_path"
+        else
+            printf '%s\n' "$line"
+        fi
+    done < "$ROOT_DIR/config/flameshot/flameshot.ini" > "$WORK_DIR/flameshot.ini"
+    mkdir -p "$screenshots"
+    install_file "$WORK_DIR/flameshot.ini" "$HOME/.config/flameshot/flameshot.ini"
+    log 'Flameshot 配置已导入。请手动打开应用，并按 macOS 提示授予屏幕录制权限。'
+}
+
 install_vim_plugins() {
     log '安装 Vim 插件'
     local plug="$HOME/.vim/autoload/plug.vim"
@@ -268,16 +384,22 @@ main() {
     show_plan
     (( ! DRY_RUN )) || return 0
     preflight
-    confirm_packages
+    (( OPTIONAL_ONLY )) || confirm_packages
     WORK_DIR=$(mktemp -d "${TMPDIR:-/tmp}/macos-setup.XXXXXX")
     trap cleanup EXIT
     trap 'on_error "$?" "$LINENO"' ERR
     set -E
+    if (( OPTIONAL_ONLY )); then
+        setup_optional
+        [[ ! $BACKUP_DIR ]] || printf '原配置备份：%s\n' "$BACKUP_DIR"
+        return 0
+    fi
     setup_homebrew
     install_blesh
     install_configs
     install_vim_plugins
     setup_login_shell
+    setup_optional
     log '配置完成。重新打开终端后使用 Bash 配置。'
     printf '%s\n' \
         'iTerm2：在 Profiles 中选择 Solarized Light (Bash)，可设为默认配置。' \
