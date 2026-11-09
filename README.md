@@ -54,16 +54,18 @@ bash setup.sh --optional-only           # 只处理可选组，仍需输入 y
 
 1. 重新打开终端。iTerm2 的 **Profiles** 中选择 **Solarized Light (Bash)**；若要以后直接使用，在 Settings > Profiles 中将其设为默认。这样 ANSI dircolors 与终端调色板相互匹配。此脚本未配置 Terminal.app 的颜色。
 2. 打开 Karabiner，按 macOS 提示授予输入监控、辅助功能及驱动所需权限，在 **Complex Modifications > Add predefined rule** 中按需启用规则。
-3. 左 Shift 单击规则发出 Caps Lock，需要在系统输入法设置中开启 Caps Lock 切换输入源。iTerm2 的全局快捷键规则可能触发 macOS 自动化授权。规则文件按当前内容保留了 Shottr 映射，但清单已移除 Shottr，新机上可不启用这一条；以后使用它时，应用内快捷键需要设为 `Shift+Cmd+2`。
+3. 左 Shift 单击规则发出 Caps Lock，需要在系统输入法设置中开启 Caps Lock 切换输入源。iTerm2 的全局快捷键规则可能触发 macOS 自动化授权。
 
 规则文件：
 
 | 文件 | 内容 |
 | --- | --- |
-| `custom_shortcuts.json` | 12 条自定义规则，包含左 Option+E / D / L 和工作区切换；已移除标题和文件名中的个人账号 |
+| `custom_shortcuts.json` | 11 条自定义规则，包含左 Option+E / D / L 和工作区切换；已移除标题和文件名中的个人账号 |
 | `windows_shortcuts_on_macos.json` | 30 条 Windows 风格快捷键 |
 
 Windows 风格的三个常用组合键按**键盘位置**使用左 Option（Alt）对应 Win 键，即 Mac 键盘左 Control 旁边的键。标准 PC 键盘上的实体 Win 键通常识别为 Command，两者的键码不同。
+
+Flameshot 快捷键：已删除旧的 `Shottr: Ctrl+Cmd+A -> Shift+Cmd+2` 规则；`Ctrl+A => Cmd+A (Select all)` 只允许额外的 Caps Lock，不匹配带 Command、Option 或 Shift 的组合，避免截走 `Ctrl+Cmd+A`。已有机器需复制这两个更新后的规则文件到 `~/.config/karabiner/assets/complex_modifications/`，在 **Complex Modifications** 中移除旧 Shottr 规则，并移除后重新添加 Ctrl+A 全选规则。替换仓库规则文件不会自动更新已启用规则，无需重跑整个安装脚本。
 
 | 按键 | 功能 | `custom_shortcuts.json` 中的规则名称 |
 | --- | --- | --- |
