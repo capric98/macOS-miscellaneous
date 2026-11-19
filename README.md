@@ -42,7 +42,18 @@ bash setup.sh
 
 Apple Silicon Mac mini 可以配对带 Touch ID 的 Magic Keyboard 并录入指纹。配置后，在本机终端运行 `sudo -k && sudo -v`，清除缓存并重新验证。[Apple 的 Mac mini 键盘指南](https://support.apple.com/guide/mac-mini/magic-keyboard-apd0e7983e19/mac)
 
-Apple Watch 的「自动解锁」支持解锁 Mac 并批准部分管理员请求。原生 `pam_tid.so` 在发起 sudo 授权前要求 Touch ID 可用。只有手表的 Mac mini 可以通过第三方 `pam-watchid` 模块实现 sudo 手表确认。此初始化使用 Apple 自带的模块。[Apple Watch 自动解锁](https://support.apple.com/en-us/102442)、[Apple 的 pam_tid 源码](https://github.com/apple-oss-distributions/pam_modules/blob/main/modules/pam_tid/pam_tid.c)、[pam-watchid 项目](https://github.com/mostpinkest/pam-watchid)
+### sudo 使用 Apple Watch
+
+要在 Apple Silicon Mac 上使用手表批准 `sudo`，先在系统设置的「登录密码」或「触控 ID 与密码」中开启 Apple Watch 自动解锁。需要 macOS Sonoma 或更新版本，以及 Xcode 或 Command Line Tools。[Apple Watch 自动解锁](https://support.apple.com/en-us/102442)
+
+```bash
+bash tools/sudo-watch-id.sh --dry-run
+bash tools/sudo-watch-id.sh
+```
+
+这个独立入口在普通用户权限下下载、校验并编译固定提交的 `pam-watchid`。首次安装需要 sudo 授权。模块安装在 root 管理的 `/usr/local/lib/pam/macos-setup/`，认证规则写入 `/etc/pam.d/sudo_local`。已有规则按原顺序保留，已有文件先备份。手表不可用或取消确认时，sudo 继续使用系统密码验证。[pam-watchid 上游源码](https://github.com/mostpinkest/pam-watchid/tree/ce04b062ccb70ac781a68c832f9d84bb42816718)
+
+在本机终端运行 `sudo -k && sudo -v` 重新验证。收到手表通知时双击侧边按钮。要验证密码回退，再运行一次并取消手表验证，然后在终端输入 Mac 登录密码。停用时，从 `/etc/pam.d/sudo_local` 删除 `pam_watchid.so.2` 那一行即可。
 
 ## 可选软件组：mpv + Flameshot
 
@@ -176,6 +187,7 @@ docs/sources.md               上游来源、固定版本
 tests/                       在临时 HOME 中验证脚本行为
 tools/homebrew-paths.rb       从 Brewfile 清单与 Homebrew 元数据筛选 keg-only 路径
 tools/sudo-touch-id.sh        检查和写入 sudo 的 Touch ID 配置
+tools/sudo-watch-id.sh        按需安装 sudo 的 Apple Watch 认证
 tools/resize-picture/         原图片处理工具，独立于初始化流程
 tools/legacy/                原自定义 aria2 formula，仅归档，不自动安装
 ```
@@ -184,7 +196,7 @@ tools/legacy/                原自定义 aria2 formula，仅归档，不自动�
 
 ```bash
 python3 -m unittest discover -s tests -v
-for file in setup.sh tools/sudo-touch-id.sh config/bash/bash_profile config/bash/bashrc config/bash/blerc config/shell/homebrew.sh; do
+for file in setup.sh tools/sudo-touch-id.sh tools/sudo-watch-id.sh config/bash/bash_profile config/bash/bashrc config/bash/blerc config/shell/homebrew.sh; do
     /bin/bash -n "$file" || break
 done
 /bin/zsh -n config/shell/homebrew.sh

@@ -16,14 +16,14 @@ pam_auth_rules() {
     ' "$1"
 }
 
-sudo_touch_id_status() {
-    local pam_dir=$1 sudo_rules local_rules target="$1/sudo_local"
-    local touch_id='^auth (required|requisite|sufficient|binding|optional) ([^ ]*/)?pam_tid\.so(\.[0-9]+)?( |$)'
+sudo_pam_status() {
+    local pam_dir=$1 module_pattern=$2 sudo_rules local_rules target="$1/sudo_local"
+    local rule_pattern="^auth (required|requisite|sufficient|binding|optional) ([^ ]*/)?${module_pattern}( |$)"
     local stock_rules=$'auth include sudo_local\nauth sufficient pam_smartcard.so\nauth required pam_opendirectory.so'
 
     [[ -f $pam_dir/sudo && -r $pam_dir/sudo ]] || { printf 'unsafe\n'; return 0; }
     sudo_rules=$(pam_auth_rules "$pam_dir/sudo") || return 1
-    if /usr/bin/grep -Eq "$touch_id" <<< "$sudo_rules"; then
+    if /usr/bin/grep -Eq "$rule_pattern" <<< "$sudo_rules"; then
         printf 'configured\n'
     elif ! /usr/bin/grep -Fxq 'auth include sudo_local' <<< "$sudo_rules"; then
         printf 'unsupported\n'
@@ -34,7 +34,7 @@ sudo_touch_id_status() {
         if [[ -f $target ]]; then
             local_rules=$(pam_auth_rules "$target") || return 1
         fi
-        if /usr/bin/grep -Eq "$touch_id" <<< "$local_rules"; then
+        if /usr/bin/grep -Eq "$rule_pattern" <<< "$local_rules"; then
             printf 'configured\n'
         elif [[ $sudo_rules != "$stock_rules" ]]; then
             # Adding a sufficient module could bypass custom rules after the include.
@@ -43,6 +43,10 @@ sudo_touch_id_status() {
             printf 'missing\n'
         fi
     fi
+}
+
+sudo_touch_id_status() {
+    sudo_pam_status "$1" 'pam_tid\.so(\.[0-9]+)?'
 }
 
 touch_id_available() {
@@ -54,11 +58,11 @@ JXA
     ) && [[ $available == true ]]
 }
 
-install_sudo_touch_id() (
+install_sudo_pam_rule() (
     set -eu
     umask 077
-    local pam_dir=$1 target="$1/sudo_local"
-    local rule='auth       sufficient     pam_tid.so' status backup= mode uid
+    local pam_dir=$1 target="$1/sudo_local" module=$2 module_pattern=$3
+    local rule="auth       sufficient     $module" status backup= mode uid
 
     # Keep this in subshell scope for the EXIT trap on Bash 3.2.
     lock="$pam_dir/.sudo_local.macos-setup.lock"
@@ -69,9 +73,9 @@ install_sudo_touch_id() (
     trap '/bin/rm -f "$lock/new" "$lock/original"; /bin/rmdir "$lock"' EXIT
     trap 'exit 1' HUP INT TERM
 
-    status=$(sudo_touch_id_status "$pam_dir")
+    status=$(sudo_pam_status "$pam_dir" "$module_pattern")
     case $status in
-        configured) printf '已存在 sudo Touch ID 规则。\n'; exit 0 ;;
+        configured) printf '已存在 sudo 认证规则（%s）。\n' "$module"; exit 0 ;;
         missing) ;;
         *) printf 'sudo 的 PAM 配置已变动，请检查后重试。\n' >&2; exit 1 ;;
     esac
@@ -100,12 +104,16 @@ install_sudo_touch_id() (
     fi
     /bin/mv -fh "$lock/new" "$target"
     [[ -z $backup ]] || printf '原 sudo_local 备份：%s/sudo_local\n' "$backup"
-    if [[ $(sudo_touch_id_status "$pam_dir") != configured ]]; then
-        printf '无法在 sudo 的 PAM 配置中确认 Touch ID 规则，请检查 sudo_local。\n' >&2
+    if [[ $(sudo_pam_status "$pam_dir" "$module_pattern") != configured ]]; then
+        printf '无法在 sudo 的 PAM 配置中确认规则，请检查 sudo_local。\n' >&2
         exit 1
     fi
-    printf '已为 sudo 配置 Touch ID。\n'
+    printf '已为 sudo 配置 %s。\n' "$module"
 )
+
+install_sudo_touch_id() {
+    install_sudo_pam_rule "$1" pam_tid.so 'pam_tid\.so(\.[0-9]+)?'
+}
 
 if [[ ${BASH_SOURCE[0]} == "$0" ]]; then
     (( EUID == 0 )) || exit 1

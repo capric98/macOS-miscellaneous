@@ -209,6 +209,27 @@ setup_sudo_touch_id
 ''')
         self.assertIn("非本机交互会话", result.stdout)
 
+    def test_sudo_watch_id_dry_run_is_read_only(self):
+        result = self.shell('/bin/bash "$ROOT_DIR/tools/sudo-watch-id.sh" --dry-run')
+        self.assertIn("pam_watchid.so.2", result.stdout)
+        self.assertIn("密码回退", result.stdout)
+        self.assertEqual(list(self.base.iterdir()), [self.home])
+
+    def test_sudo_watch_id_keeps_password_fallback_and_existing_local_rules(self):
+        pam_dir = self.prepare_fake_pam()
+        target = pam_dir / "sudo_local"
+        original = "auth sufficient pam_tid.so\n# existing settings\n"
+        target.write_text(original)
+        stock = (pam_dir / "sudo").read_bytes()
+        module = "/usr/local/lib/pam/macos-setup/pam_watchid.so.2"
+        install = f'''install_sudo_pam_rule "$FAKE_PAM_DIR" "{module}" 'pam_watchid\\.so(\\.[0-9]+)?' '''
+        self.shell(install)
+        self.shell(install)
+        self.assertEqual(target.read_text(), original + f"\nauth       sufficient     {module}\n")
+        self.assertEqual((pam_dir / "sudo").read_bytes(), stock)
+        backup, = pam_dir.glob(".sudo_local.backup.*/sudo_local")
+        self.assertEqual(backup.read_text(), original)
+
     def test_backup_keeps_original_and_rerun_is_unchanged(self):
         target = self.home / ".bashrc"
         target.write_text("original settings\n")
