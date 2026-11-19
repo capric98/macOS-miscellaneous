@@ -1,7 +1,5 @@
-# Native Apple Silicon Homebrew.
-if [[ -x /opt/homebrew/bin/brew ]]; then
-    eval "$(/opt/homebrew/bin/brew shellenv bash)"
-fi
+# Shared environment also applies to non-interactive login shells.
+[[ ! -r $HOME/.config/macos-setup/homebrew.sh ]] || source "$HOME/.config/macos-setup/homebrew.sh"
 
 [[ ! -r $HOME/.bashrc ]] || source "$HOME/.bashrc"
 [[ ! -r $HOME/.bash_profile.local ]] || source "$HOME/.bash_profile.local"

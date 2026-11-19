@@ -23,7 +23,7 @@ class SetupTests(unittest.TestCase):
         self.home = self.base / "home"
         self.home.mkdir()
         self.env = os.environ.copy()
-        for key in ("BASH_ENV", "ENV", "XDG_CONFIG_HOME", "BLE_VERSION"):
+        for key in ("BASH_ENV", "ENV", "XDG_CONFIG_HOME", "BLE_VERSION", "ZDOTDIR"):
             self.env.pop(key, None)
         self.env.update(HOME=str(self.home), SETUP_SCRIPT=str(ROOT / "setup.sh"))
 
@@ -55,9 +55,13 @@ class SetupTests(unittest.TestCase):
 download() { exit 91; }
 setup_homebrew() { exit 92; }
 sudo() { exit 93; }
+sudo_touch_id_status() { exit 94; }
 main --dry-run
 """)
         self.assertIn("brew bundle install --no-upgrade", result.stdout)
+        self.assertIn("检查 sudo 的 Touch ID 配置", result.stdout)
+        skipped = self.shell("main --dry-run --no-sudo-touch-id")
+        self.assertNotIn("检查 sudo 的 Touch ID 配置", skipped.stdout)
         self.assertEqual(list(self.home.iterdir()), [])
         self.assertEqual(list(self.base.iterdir()), [self.home])
 
@@ -74,6 +78,7 @@ main --dry-run
         result = self.shell("""
 preflight() { exit 91; }
 setup_optional() { exit 92; }
+setup_sudo_touch_id() { exit 93; }
 main --optional-only --dry-run
 """)
         self.assertIn((ROOT / "Brewfile.optional").read_text(), result.stdout)
@@ -130,6 +135,80 @@ preflight
 """, success=False)
         self.assertIn("只支持 Apple Silicon", result.stderr)
 
+    def prepare_fake_pam(self):
+        pam_dir = self.base / "pam.d"
+        pam_dir.mkdir()
+        (pam_dir / "sudo").write_text(
+            "# sudo: auth account password session\n"
+            "auth\tinclude\tsudo_local # local configuration\n"
+            "auth sufficient pam_smartcard.so\n"
+            "auth required pam_opendirectory.so\n"
+            "account required pam_permit.so\n"
+        )
+        self.env["FAKE_PAM_DIR"] = str(pam_dir)
+        return pam_dir
+
+    def test_sudo_touch_id_creates_local_policy_and_is_idempotent(self):
+        pam_dir = self.prepare_fake_pam()
+        sudo_rules = (pam_dir / "sudo").read_bytes()
+        target = pam_dir / "sudo_local"
+        self.shell('install_sudo_touch_id "$FAKE_PAM_DIR"')
+        modified = target.stat().st_mtime_ns
+        self.assertEqual(target.stat().st_mode & 0o777, 0o644)
+        self.assertIn("auth       sufficient     pam_tid.so\n", target.read_text())
+        self.shell('install_sudo_touch_id "$FAKE_PAM_DIR"')
+        self.assertEqual(target.stat().st_mtime_ns, modified)
+        self.assertEqual(set(pam_dir.iterdir()), {target, pam_dir / "sudo"})
+        self.assertEqual((pam_dir / "sudo").read_bytes(), sudo_rules)
+
+    def test_sudo_touch_id_keeps_existing_rule_order_and_backs_up_local_policy(self):
+        pam_dir = self.prepare_fake_pam()
+        target = pam_dir / "sudo_local"
+        original = "  # auth sufficient pam_tid.so\nauth optional pam_reattach.so"
+        target.write_text(original)
+        target.chmod(0o640)
+        self.shell('install_sudo_touch_id "$FAKE_PAM_DIR"')
+        self.assertEqual(target.read_text(), original + "\nauth       sufficient     pam_tid.so\n")
+        self.assertEqual(target.stat().st_mode & 0o777, 0o640)
+        backup, = pam_dir.glob(".sudo_local.backup.*/sudo_local")
+        self.assertEqual(backup.read_text(), original)
+        self.assertEqual(backup.parent.stat().st_mode & 0o777, 0o700)
+
+    def test_sudo_touch_id_checks_effective_rules_and_custom_stacks(self):
+        pam_dir = self.prepare_fake_pam()
+        policy, target = pam_dir / "sudo", pam_dir / "sudo_local"
+        stock_rules = policy.read_text()
+        active_rule = " auth\t sufficient /usr/lib/pam/pam_tid.so.2 # existing\n"
+        for rules, local_rules, expected in (
+            (stock_rules, active_rule, "configured"),
+            (active_rule + "auth required pam_opendirectory.so\n", "", "configured"),
+            ("auth required pam_opendirectory.so\n", active_rule, "unsupported"),
+            (stock_rules + "auth requisite /opt/vendor/pam_mfa.so\n", "", "custom"),
+            (stock_rules, "# auth sufficient pam_tid.so\n", "missing"),
+        ):
+            with self.subTest(expected=expected):
+                policy.write_text(rules)
+                target.write_text(local_rules)
+                result = self.shell('sudo_touch_id_status "$FAKE_PAM_DIR"')
+                self.assertEqual(result.stdout.strip(), expected)
+
+    def test_sudo_touch_id_failed_write_leaves_policy_intact(self):
+        pam_dir = self.prepare_fake_pam()
+        target = pam_dir / "sudo_local"
+        target.write_text("# existing\n")
+        target.chmod(0o664)
+        self.shell('install_sudo_touch_id "$FAKE_PAM_DIR"', success=False)
+        self.assertEqual(target.read_text(), "# existing\n")
+        self.assertEqual(set(pam_dir.iterdir()), {target, pam_dir / "sudo"})
+
+    def test_sudo_touch_id_does_not_probe_biometrics_without_terminal(self):
+        result = self.shell('''
+sudo_touch_id_status() { printf 'missing\\n'; }
+touch_id_available() { exit 91; }
+setup_sudo_touch_id
+''')
+        self.assertIn("非本机交互会话", result.stdout)
+
     def test_backup_keeps_original_and_rerun_is_unchanged(self):
         target = self.home / ".bashrc"
         target.write_text("original settings\n")
@@ -170,6 +249,7 @@ preflight
         active.write_text('{"profiles": []}\n')
         self.shell("""
 WORK_DIR=$(mktemp -d "$HOME/work.XXXXXX")
+: > "$WORK_DIR/homebrew-paths"
 BASH_BIN=/opt/homebrew/bin/bash
 install_configs
 rm -rf "$WORK_DIR"
@@ -191,27 +271,125 @@ rm -rf "$WORK_DIR"
         self.assertEqual(result.stdout, "ready")
         self.assertEqual(result.stderr, "")
 
-    def test_ffmpeg_full_command_is_available_in_a_new_bash(self):
-        prefix = self.base / "brew"
-        binary = prefix / "opt/ffmpeg-full/bin"
-        binary.mkdir(parents=True)
-        executable = binary / "ffmpeg"
-        executable.write_text("#!/bin/bash\nprintf full-version")
-        executable.chmod(0o755)
-        self.env.update(
-            HOMEBREW_PREFIX=str(prefix), PATH="/usr/bin:/bin:/usr/sbin:/sbin",
-            BASHRC_TEST=str(ROOT / "config/bash/bashrc"),
+    def prepare_shell_paths(self):
+        prefix = self.base / "brew prefix [test]"
+        config = self.home / ".config/macos-setup"
+        config.mkdir(parents=True)
+        shutil.copyfile(ROOT / "config/shell/homebrew.sh", config / "homebrew.sh")
+        paths = [prefix / "opt/ffmpeg-full/bin", prefix / "opt/other@2/bin",
+                 prefix / "opt/other@2/sbin", prefix / "bin", prefix / "sbin"]
+        for directory in paths:
+            directory.mkdir(parents=True)
+        for directory, name in ((paths[0], "ffmpeg"), (paths[1], "other-tool"),
+                                (paths[2], "other-admin")):
+            executable = directory / name
+            executable.write_text("#!/bin/sh\nprintf '%s' " + name)
+            executable.chmod(0o755)
+        (config / "homebrew-paths").write_text(
+            "\n".join(map(str, paths[:3] + paths[:1] + [prefix / "missing/bin"])) + "\n"
         )
-        result = subprocess.run(
-            ["/bin/bash", "--noprofile", "--norc", "-ic",
-             'source "$BASHRC_TEST"; source "$BASHRC_TEST"; command -v ffmpeg; ffmpeg; printf "\\n%s" "$PATH"'],
-            env=self.env, cwd=self.base, stdin=subprocess.DEVNULL,
-            text=True, capture_output=True,
+        self.env.update(HOMEBREW_PREFIX=str(prefix), PATH="/usr/bin:/bin:/usr/sbin:/sbin")
+        return paths
+
+    def test_shared_path_order_and_deduplication_in_bash_and_zsh(self):
+        paths = self.prepare_shell_paths()
+        original = ":/usr/bin:" + str(paths[0]) + ":/bin:" + str(paths[0]) + ":"
+        self.env["PATH"] = original
+        for shell, options in (("/bin/bash", ["--noprofile", "--norc"]), ("/bin/zsh", ["-f"])):
+            with self.subTest(shell=shell):
+                result = subprocess.run(
+                    [shell, *options, "-c", '''
+source "$HOME/.config/macos-setup/homebrew.sh"
+source "$HOME/.config/macos-setup/homebrew.sh"
+command -v ffmpeg; command -v other-tool; command -v other-admin
+printf '%s\\n' "$PATH"
+'''], env=self.env, text=True, capture_output=True, timeout=10,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                lines = result.stdout.splitlines()
+                self.assertEqual(lines[:3], [str(paths[0] / "ffmpeg"), str(paths[1] / "other-tool"),
+                                             str(paths[2] / "other-admin")])
+                self.assertEqual(lines[3].split(":"), list(map(str, paths)) + ["", "/usr/bin", "/bin", ""])
+
+    def test_startup_files_load_shared_paths_and_preserve_zsh_settings(self):
+        paths = self.prepare_shell_paths()
+        for name in (".zprofile", ".zshrc"):
+            (self.home / name).write_text("# existing settings\nexport KEPT_ZSH_SETTING=yes\n")
+        self.shell('''
+WORK_DIR=$(mktemp -d "$HOME/work.XXXXXX")
+install_shell_path_hook "$HOME/.zprofile"
+install_shell_path_hook "$HOME/.zshrc"
+install_shell_path_hook "$HOME/.zprofile"
+install_shell_path_hook "$HOME/.zshrc"
+rm -rf "$WORK_DIR"
+''')
+        for name in ("bash_profile", "bashrc"):
+            shutil.copyfile(ROOT / "config/bash" / name, self.home / ("." + name))
+        for name in (".zprofile", ".zshrc"):
+            content = (self.home / name).read_text()
+            self.assertTrue(content.startswith("# existing settings\n"))
+            self.assertEqual(content.count("|| source"), 1)
+        backups = list(self.home.glob(".local/state/macos-setup/backups/*"))
+        self.assertEqual(len(backups), 1)
+        self.assertEqual((backups[0] / ".zshrc").read_text(),
+                         "# existing settings\nexport KEPT_ZSH_SETTING=yes\n")
+        for shell in ("/bin/bash", "/bin/zsh"):
+            for mode in ("-ic", "-lic", "-lc"):
+                with self.subTest(shell=shell, mode=mode):
+                    result = subprocess.run(
+                        [shell, mode, 'command -v ffmpeg; ffmpeg; printf "\\n%s\\n" "$PATH"'],
+                        env=self.env, cwd=self.base, stdin=subprocess.DEVNULL,
+                        text=True, capture_output=True, timeout=10,
+                    )
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    lines = result.stdout.splitlines()
+                    self.assertEqual(lines[:2], [str(paths[0] / "ffmpeg"), "ffmpeg"])
+                    for directory in paths:
+                        self.assertEqual(lines[2].split(":").count(str(directory)), 1)
+
+    def test_path_inventory_uses_only_declared_installed_keg_only_formulae(self):
+        prefix = self.base / "brew prefix"
+        formulae = []
+        for name, keg_only, installed, directories in (
+                ("ffmpeg-full", True, True, ["bin"]),
+                ("other@2", True, True, ["bin", "sbin"]),
+                ("normal", False, True, ["bin"]),
+                ("dependency", True, True, ["bin"]),
+                ("uninstalled", True, False, ["bin"]),
+                ("library", True, True, ["lib"]),
+                ("tapped", True, True, ["sbin"])):
+            for directory in directories:
+                (prefix / "opt" / name / directory).mkdir(parents=True)
+            formulae.append(dict(name=name, full_name="vendor/tools/tapped" if name == "tapped" else name,
+                                 tap="vendor/tools" if name == "tapped" else "homebrew/core",
+                                 keg_only=keg_only, installed=[{}] if installed else [],
+                                 aliases=["other-alias"] if name == "other@2" else [], oldnames=[]))
+        (self.base / "formulae.json").write_text(json.dumps({"formulae": formulae}))
+        (self.base / "formulae.txt").write_text(
+            "ffmpeg-full\nother-alias\nhomebrew/core/other@2\nnormal\nuninstalled\nlibrary\n"
+            "vendor/tools/tapped\nmissing\nwrong/tap/ffmpeg-full\n"
         )
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout.splitlines()[0], str(executable))
-        self.assertEqual(result.stdout.splitlines()[1], "full-version")
-        self.assertEqual(result.stdout.splitlines()[2].split(":").count(str(binary)), 1)
+        # Mock only brew's runtime dispatch; exercise the real JSON selector.
+        self.env["PATH_TEST_PREFIX"] = str(prefix)
+        self.shell('''
+WORK_DIR=$(mktemp -d "$HOME/work.XXXXXX")
+BREW_PREFIX=$PATH_TEST_PREFIX
+BREW_BIN=mock_brew
+mock_brew() {
+    case $1 in
+        bundle) cat "$HOME/../formulae.txt" ;;
+        info) cat "$HOME/../formulae.json" ;;
+        ruby) [[ $HOMEBREW_DEVELOPER == 1 ]]; shift; /usr/bin/ruby "$@" ;;
+        *) return 96 ;;
+    esac
+}
+generate_homebrew_paths
+cp "$WORK_DIR/homebrew-paths" "$HOME/generated-paths"
+rm -rf "$WORK_DIR"
+''')
+        self.assertEqual((self.home / "generated-paths").read_text().splitlines(),
+                         [str(prefix / "opt" / name / directory) for name, directory in
+                          (("ffmpeg-full", "bin"), ("other@2", "bin"), ("other@2", "sbin"), ("tapped", "sbin"))])
 
     def test_bad_checksum_stops_before_configuration_writes(self):
         result = self.shell("""
@@ -258,7 +436,10 @@ setup_login_shell
 case $1 in
   shellenv) printf 'export HOMEBREW_PREFIX=%q\nexport PATH=%q:$PATH\n' "$FAKE_PREFIX" "$FAKE_PREFIX/bin" ;;
   --prefix) printf '%s\n' "$FAKE_PREFIX" ;;
-  bundle) [[ ${FAIL_BUNDLE:-0} != 1 ]] || exit 37 ;;
+  bundle) if [[ ${2-} == list ]]; then printf 'ffmpeg-full\\n';
+          else [[ ${FAIL_BUNDLE:-0} != 1 ]] || exit 37; fi ;;
+  info) printf '{"formulae":[{"name":"ffmpeg-full","full_name":"ffmpeg-full","tap":"homebrew/core","keg_only":true,"installed":[{}]}]}\\n' ;;
+  ruby) shift; exec /usr/bin/ruby "$@" ;;
   tap|trust|help) : ;;
   *) exit 96 ;;
 esac
@@ -275,6 +456,7 @@ touch "$HOME/.vim/plugged/vim-colors-solarized/colors/solarized.vim" "$HOME/.vim
             executable = binary / name
             executable.write_text("#!/bin/bash\nset -e\n" + content)
             executable.chmod(0o755)
+        (prefix / "opt/ffmpeg-full/bin").mkdir(parents=True)
         ble_script = b'''#!/bin/bash
 case ${1-} in
   --version) echo 'ble.sh (Bash Line Editor), version 0.4.0-nightly+d81fd54' ;;
@@ -296,6 +478,7 @@ esac
         )
         return """
 preflight() { :; }
+sudo_touch_id_status() { printf 'configured\\n'; }
 find_brew() { BREW_BIN="$FAKE_PREFIX/bin/brew"; }
 download() {
     if [[ $1 == "$BLE_URL" ]]; then cp "$BLE_FIXTURE" "$2";
@@ -310,7 +493,7 @@ main --yes --no-change-shell
     def test_full_mocked_install_and_rerun(self):
         script = self.prepare_fake_install()
         (self.home / ".bashrc").write_text("original\n")
-        self.shell(script)
+        self.assertIn("已存在 sudo Touch ID 规则", self.shell(script).stdout)
         modified = (self.home / ".bashrc").stat().st_mtime_ns
         self.shell(script)
         self.assertEqual((self.home / ".bashrc").stat().st_mtime_ns, modified)
@@ -320,6 +503,8 @@ main --yes --no-change-shell
         self.assertIn("bundle install --no-upgrade --file", calls)
         self.assertIn("PlugInstall --sync", calls)
         self.assertTrue((self.home / ".local/share/blesh/ble.sh").exists())
+        self.assertEqual((self.home / ".config/macos-setup/homebrew-paths").read_text(),
+                         str(self.base / "brew/opt/ffmpeg-full/bin") + "\n")
         self.assertFalse((self.home / ".config/mpv").exists())
         self.assertFalse((self.home / ".config/flameshot").exists())
 

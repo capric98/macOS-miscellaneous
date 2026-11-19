@@ -3,11 +3,13 @@
 set -euo pipefail
 
 ROOT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+source "$ROOT_DIR/tools/sudo-touch-id.sh"
 BREWFILE="$ROOT_DIR/Brewfile"
 OPTIONAL_BREWFILE="$ROOT_DIR/Brewfile.optional"
 DRY_RUN=0
 ASSUME_YES=0
 CHANGE_SHELL=1
+SUDO_TOUCH_ID=1
 INSTALL_PACKAGES=1
 OPTIONAL_ONLY=0
 SKIP_OPTIONAL=0
@@ -36,6 +38,7 @@ usage() {
   --yes                 表示已审核 Brewfile，跳过清单确认
   --skip-packages       跳过 Homebrew 软件安装，仍检查配置需要的工具
   --no-change-shell     不修改默认登录 shell，也不写 /etc/shells
+  --no-sudo-touch-id    跳过 sudo Touch ID 检查和配置
   --optional-only       仅询问是否安装 mpv + Flameshot 并导入配置
   --skip-optional       跳过可选软件组的询问和配置
   -h, --help            显示帮助
@@ -50,6 +53,7 @@ parse_args() {
             --yes) ASSUME_YES=1 ;;
             --skip-packages) INSTALL_PACKAGES=0 ;;
             --no-change-shell) CHANGE_SHELL=0 ;;
+            --no-sudo-touch-id) SUDO_TOUCH_ID=0 ;;
             --optional-only) OPTIONAL_ONLY=1 ;;
             --skip-optional) SKIP_OPTIONAL=1 ;;
             -h|--help) usage; exit 0 ;;
@@ -68,6 +72,9 @@ show_plan() {
     log '待审核的 Homebrew 安装清单：'
     cat "$BREWFILE"
     log '配置操作：'
+    if (( SUDO_TOUCH_ID )); then
+        printf '%s\n' '  检查 sudo 的 Touch ID 配置，在本机交互运行且 Touch ID 可用时按需启用'
+    fi
     if (( INSTALL_PACKAGES )); then
         printf '%s\n' '  安装 Homebrew（若缺少），brew bundle install --no-upgrade'
     else
@@ -76,6 +83,7 @@ show_plan() {
     printf '%s\n' \
         '  备份不同的现有文件到 ~/.local/state/macos-setup/backups/' \
         '  复制 .bash_profile、.bashrc、.blerc、.vimrc 和 Solarized dircolors' \
+        '  为 Bash / zsh 配置 Brewfile 中已安装 keg-only 软件的 bin / sbin，避免 PATH 重复' \
         "  安装固定版本 ble.sh ($BLE_VERSION)，校验 SHA-256" \
         '  添加 iTerm2 动态配置 Solarized Light (Bash)' \
         '  放入两个 Karabiner 规则文件，供界面中选择启用'
@@ -183,6 +191,34 @@ check_sha256() {
     printf '%s  %s\n' "$2" "$1" | shasum -a 256 -c -
 }
 
+setup_sudo_touch_id() {
+    (( SUDO_TOUCH_ID )) || return 0
+    local status
+    status=$(sudo_touch_id_status /etc/pam.d) || status=unsafe
+    case $status in
+        configured) log '已存在 sudo Touch ID 规则。'; return 0 ;;
+        unsupported) log '未发现 sudo_local 入口，跳过 sudo Touch ID 配置。'; return 0 ;;
+        custom) log '检测到自定义 sudo 认证栈，跳过 Touch ID 配置。'; return 0 ;;
+        unsafe) log '无法安全读取 sudo 的 PAM 配置，跳过 Touch ID 配置。' >&2; return 0 ;;
+    esac
+    if [[ ! -t 0 || -n ${SSH_CONNECTION-} ]]; then
+        log '非本机交互会话，跳过 sudo Touch ID 配置。'
+        return 0
+    fi
+    if [[ ! -f /usr/lib/pam/pam_tid.so.2 && ! -f /usr/lib/pam/pam_tid.so ]]; then
+        log '未找到系统自带的 pam_tid 模块，跳过 sudo Touch ID 配置。'
+        return 0
+    fi
+    if ! touch_id_available; then
+        log '当前会话的 Touch ID 不可用，跳过 sudo 配置。可在系统设置里确认 Touch ID 已配置后重试。'
+        return 0
+    fi
+    log '启用 sudo Touch ID（首次配置可能需要管理员密码）'
+    if ! /usr/bin/sudo -- /bin/bash "$ROOT_DIR/tools/sudo-touch-id.sh"; then
+        log 'sudo Touch ID 配置未完成，继续其余初始化。' >&2
+    fi
+}
+
 find_brew() {
     BREW_BIN=/opt/homebrew/bin/brew
     [[ -x $BREW_BIN ]]
@@ -214,6 +250,34 @@ setup_homebrew() {
         command -v "$executable" >/dev/null 2>&1 || die "缺少 $executable，请保留核心依赖。"
     done
     [[ -r $BREW_PREFIX/etc/profile.d/bash_completion.sh ]] || die '缺少 bash-completion@2。'
+    generate_homebrew_paths
+}
+
+generate_homebrew_paths() {
+    # Let Homebrew parse its own DSL (including options, aliases and conditions).
+    HOMEBREW_NO_AUTO_UPDATE=1 "$BREW_BIN" bundle list --formula --file "$BREWFILE" > "$WORK_DIR/formulae.txt"
+    HOMEBREW_NO_AUTO_UPDATE=1 "$BREW_BIN" info --json=v2 --formula --installed > "$WORK_DIR/formulae.json"
+    # Use Homebrew's Ruby; no extra jq/Python dependency is needed for setup.
+    # Scope developer mode to this process instead of letting brew persist it.
+    HOMEBREW_DEVELOPER=1 HOMEBREW_NO_AUTO_UPDATE=1 "$BREW_BIN" ruby "$ROOT_DIR/tools/homebrew-paths.rb" \
+        "$WORK_DIR/formulae.txt" "$WORK_DIR/formulae.json" "$BREW_PREFIX" > "$WORK_DIR/homebrew-paths"
+}
+
+install_shell_path_hook() {
+    local target=$1
+    local hook='[[ ! -r "$HOME/.config/macos-setup/homebrew.sh" ]] || source "$HOME/.config/macos-setup/homebrew.sh"'
+    [[ ! -d $target ]] || die "配置目标是目录：$target"
+    if [[ -f $target ]] && grep -Fxq "$hook" "$target"; then
+        return 0
+    fi
+    # Preserve existing zsh settings; install_file handles backups and symlinks.
+    if [[ -f $target ]]; then
+        cat "$target" > "$WORK_DIR/shell-path-hook"
+    else
+        : > "$WORK_DIR/shell-path-hook"
+    fi
+    printf '\n# Homebrew PATH managed by macos-setup (Bash / zsh).\n%s\n' "$hook" >> "$WORK_DIR/shell-path-hook"
+    install_file "$WORK_DIR/shell-path-hook" "$target"
 }
 
 install_blesh() {
@@ -233,9 +297,15 @@ install_blesh() {
 
 install_configs() {
     log '复制配置文件'
+    local zsh_directory=${ZDOTDIR:-$HOME}
+    [[ $zsh_directory == "$HOME" || $zsh_directory == "$HOME"/* ]] || die 'ZDOTDIR 必须位于 HOME 内，以便备份 zsh 配置。'
+    install_file "$ROOT_DIR/config/shell/homebrew.sh" "$HOME/.config/macos-setup/homebrew.sh"
+    install_file "$WORK_DIR/homebrew-paths" "$HOME/.config/macos-setup/homebrew-paths"
     install_file "$ROOT_DIR/config/bash/bash_profile" "$HOME/.bash_profile"
     install_file "$ROOT_DIR/config/bash/bashrc" "$HOME/.bashrc"
     install_file "$ROOT_DIR/config/bash/blerc" "$HOME/.blerc"
+    install_shell_path_hook "$zsh_directory/.zprofile"
+    install_shell_path_hook "$zsh_directory/.zshrc"
     install_file "$ROOT_DIR/config/vim/vimrc" "$HOME/.vimrc"
     install_file "$ROOT_DIR/config/dircolors-solarized/dircolors.ansi-light" "$HOME/.config/dircolors-solarized/dircolors.ansi-light"
     install_file "$ROOT_DIR/config/dircolors-solarized/LICENSE" "$HOME/.config/dircolors-solarized/LICENSE"
@@ -394,13 +464,14 @@ main() {
         [[ ! $BACKUP_DIR ]] || printf '原配置备份：%s\n' "$BACKUP_DIR"
         return 0
     fi
+    setup_sudo_touch_id
     setup_homebrew
     install_blesh
     install_configs
     install_vim_plugins
     setup_login_shell
     setup_optional
-    log '配置完成。重新打开终端后使用 Bash 配置。'
+    log '配置完成。重新打开终端后加载 Bash 配置或 zsh 的公共 Homebrew PATH。'
     printf '%s\n' \
         'iTerm2：在 Profiles 中选择 Solarized Light (Bash)，可设为默认配置。' \
         'Karabiner：完成系统权限授权，在 Complex Modifications > Add predefined rule 中启用规则。' \

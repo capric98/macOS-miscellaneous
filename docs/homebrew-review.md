@@ -10,7 +10,7 @@ Formula 候选使用 `brew list --formula --installed-on-request`，原始共 13
 | `bash-completion@2` | 本配置需要：Bash 补全 |
 | `cloc` | 代码行数统计 |
 | `coreutils` | 本配置需要：GNU `gls`、`gdircolors` |
-| `ffmpeg-full` | 按审核决定仅保留 full；Bash 配置自动加入其 keg-only 路径 |
+| `ffmpeg-full` | 按审核决定仅保留 full；Bash / zsh 公共配置自动加入其 keg-only 路径 |
 | `gawk` | 本配置保留：ble.sh 使用的 GNU awk |
 | `mactop` | 系统监控 |
 | `python@3.15` | 当前手动安装的 Python 版本，同时被 `yt-dlp` 依赖 |
@@ -34,6 +34,8 @@ Formula 候选使用 `brew list --formula --installed-on-request`，原始共 13
 1. 只安装 `ffmpeg-full`，不安装标准版 `ffmpeg`；不使用强制链接，直接配置 PATH。
 2. 默认清单不安装 Flameshot、mpv 和 Shottr。2026-11-07 起将 mpv + Flameshot 及相关字体保存到 `Brewfile.optional`；单独询问、默认跳过，选择后一起安装并导入配置。
 3. `claude-code@latest` 保留当前安装的通道名。
+
+PATH 不再写死 `ffmpeg-full`：安装时由 Homebrew 解析 `Brewfile`，结合已安装 formula 的 `keg_only` 元数据筛选实际存在的 `opt/<formula>/bin` / `sbin`，生成 Bash / zsh 共用清单。顺序与 Brewfile 一致；只处理清单中已安装的 keg-only 项目，不暴露清单外的依赖。受管理路径在加载时去重、提前，已卸载的目录会跳过；修改清单或安装状态后重跑脚本刷新。元数据接口见 [Homebrew Querying brew](https://docs.brew.sh/Querying-Brew)，清单解析接口见 [brew bundle list](https://docs.brew.sh/Manpage#brew-bundle-list)。
 
 默认清单没有第三方 tap。可选组沿用本机完整 cask token：`flameshot-org/flameshot/flameshot-org-flameshot` 和 `capric98/mpv-app/mpv-app`，分别使用 Flameshot 官方 tap 和个人维护的 mpv app tap。选择可选组才会添加这两个 tap，并在 Homebrew 7 以上信任这两个 cask。mpv 使用完整应用包，不引入依赖标准版 `ffmpeg` 的 Homebrew `mpv` formula；附带思源黑体可变字体和 FiraCode Nerd Font，供当前统计面板使用。脚本不会卸载当前机器已有的软件或 tap。
 

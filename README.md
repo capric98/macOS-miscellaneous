@@ -1,6 +1,6 @@
 # macOS-Miscellaneous
 
-面向 Apple Silicon 新 Mac 的配置仓库。使用一个 Bash 入口安装 Homebrew 软件、部署 Bash / Vim 配置、安装 ble.sh 和 Solarized，并放置 Karabiner 规则。
+面向 Apple Silicon 新 Mac 的配置仓库。使用一个 Bash 入口安装 Homebrew 软件、部署 Bash / Vim 配置和 Bash / zsh 公共 PATH、安装 ble.sh 和 Solarized，并放置 Karabiner 规则。
 
 ## 使用
 
@@ -23,13 +23,26 @@ bash setup.sh
 
 - 缺少时运行官方 Homebrew 安装器，使用 `/opt/homebrew`；通过 `Brewfile` 安装手动选择的软件，由 Homebrew 解析依赖。
 - 安装 Homebrew Bash，注册到 `/etc/shells`，并设为当前用户的登录 shell；可用 `--no-change-shell` 跳过。
-- 部署 `~/.bash_profile`、`~/.bashrc` 和当前一致的 `~/.blerc`。保留提示符、`cdf`、zoxide 的 `cd`、Bash 补全和 ble.sh 自动建议，并自动加入 `ffmpeg-full` 路径；交互配置不会影响非交互脚本。
+- 部署 `~/.bash_profile`、`~/.bashrc` 和当前一致的 `~/.blerc`。保留提示符、`cdf`、zoxide 的 `cd`、Bash 补全和 ble.sh 自动建议；这些交互设置不会影响非交互脚本。
+- 根据 Homebrew 元数据，为 `Brewfile` 中已安装的 keg-only formula 生成公共 PATH，覆盖存在的 `opt/<formula>/bin` / `sbin`。Bash 和 zsh 共用，按清单顺序优先于系统命令，重复加载或继承 PATH 都不会重复添加受管理路径。zsh 保留原有配置，仅在 `.zprofile` / `.zshrc` 末尾追加加载行；遵循安装时设置的 `ZDOTDIR`（须位于 HOME 内）。
 - 安装与当前构建同一提交的 ble.sh `0.4.0-nightly+d81fd54`（本机源码构建标记为 `devel4+d81fd54`），固定下载文件并校验 SHA-256。
 - 部署当前的 Solarized Light dircolors，使用 GNU `gls` 显示文件颜色。安装 iTerm2 动态配置 `Solarized Light (Bash)`，包含 Solarized 调色板和 Bash 登录命令。
 - 原样部署当前 `~/.vimrc`，安装固定提交的 vim-plug，并用 `vim -N` 关闭批处理时的 vi 兼容模式，再同步执行 `PlugInstall --sync`，随后检查两个插件的文件是否存在。
 - 安装 Karabiner 后，将两个规则文件放入 `~/.config/karabiner/assets/complex_modifications/`。不替换 `karabiner.json` 中已有的设备信息和已启用规则。
 
 脚本不会安装旧的 aria2 / Helix 配置。默认软件清单保留 `ffmpeg-full`，不含标准版 `ffmpeg`、Shottr、mpv 和 Flameshot。脚本不会卸载当前机器上的软件。
+
+公共环境保存在 `~/.config/macos-setup/homebrew.sh`，路径清单保存在同目录的 `homebrew-paths`。安装时通过 `brew bundle list --formula` 和 `brew info --json=v2 --formula --installed` 筛选，支持别名和完整 tap 名称；不加入清单外的依赖、未安装的包或不存在的目录，也不使用 `brew link --force`。终端启动不扫描软件清单。修改 Brewfile 或安装状态后重跑安装脚本即可刷新；已安装核心依赖时可加 `--skip-packages`。
+
+重新打开 Bash / zsh 后生效。非交互登录 shell 也会读取公共环境；独立的 `bash -c` / `zsh -c` 通常只继承父进程的 PATH，需要时可显式运行 `source "$HOME/.config/macos-setup/homebrew.sh"`。
+
+### sudo 使用 Touch ID
+
+初始化时会检查 sudo 的 PAM 配置。macOS Sonoma 及更新版本可使用系统更新后仍会保留的 `/etc/pam.d/sudo_local`。在本机终端交互运行、使用系统默认认证栈且当前用户可使用 Touch ID 时，脚本会按需启用，保留密码验证，并在修改已有 `sudo_local` 前备份。首次配置可能需要管理员密码。可以用 `--no-sudo-touch-id` 跳过这一步。[Apple 的 Sonoma 更新说明](https://support.apple.com/en-sg/109030)
+
+Apple Silicon Mac mini 可以配对带 Touch ID 的 Magic Keyboard 并录入指纹。配置后，在本机终端运行 `sudo -k && sudo -v`，清除缓存并重新验证。[Apple 的 Mac mini 键盘指南](https://support.apple.com/guide/mac-mini/magic-keyboard-apd0e7983e19/mac)
+
+Apple Watch 的「自动解锁」支持解锁 Mac 并批准部分管理员请求。原生 `pam_tid.so` 在发起 sudo 授权前要求 Touch ID 可用。只有手表的 Mac mini 可以通过第三方 `pam-watchid` 模块实现 sudo 手表确认。此初始化使用 Apple 自带的模块。[Apple Watch 自动解锁](https://support.apple.com/en-us/102442)、[Apple 的 pam_tid 源码](https://github.com/apple-oss-distributions/pam_modules/blob/main/modules/pam_tid/pam_tid.c)、[pam-watchid 项目](https://github.com/mostpinkest/pam-watchid)
 
 ## 可选软件组：mpv + Flameshot
 
@@ -136,6 +149,7 @@ git config --global credential.helper osxkeychain
 bash setup.sh --review-packages
 bash setup.sh --yes --skip-packages  # 已有 Homebrew 及核心工具时只配置
 bash setup.sh --no-change-shell
+bash setup.sh --no-sudo-touch-id
 bash setup.sh --optional-only          # 以后单独选择安装 mpv + Flameshot
 bash setup.sh --skip-optional          # 不询问可选组
 bash setup.sh --help
@@ -149,6 +163,7 @@ Brewfile                     可人工审核的软件清单
 Brewfile.optional            单独确认的 mpv + Flameshot 和字体清单
 config/
   bash/                      Bash 启动文件和 blerc
+  shell/                     Bash / zsh 公共 Homebrew 环境
   vim/                       当前 vimrc
   karabiner/complex_modifications/
   dircolors-solarized/        当前 ANSI Light 文件及上游许可证
@@ -159,6 +174,8 @@ templates/                   无个人身份的 Git、SSH 示例
 docs/homebrew-review.md       清单来源和审核重点
 docs/sources.md               上游来源、固定版本
 tests/                       在临时 HOME 中验证脚本行为
+tools/homebrew-paths.rb       从 Brewfile 清单与 Homebrew 元数据筛选 keg-only 路径
+tools/sudo-touch-id.sh        检查和写入 sudo 的 Touch ID 配置
 tools/resize-picture/         原图片处理工具，独立于初始化流程
 tools/legacy/                原自定义 aria2 formula，仅归档，不自动安装
 ```
@@ -167,9 +184,10 @@ tools/legacy/                原自定义 aria2 formula，仅归档，不自动�
 
 ```bash
 python3 -m unittest discover -s tests -v
-for file in setup.sh config/bash/bash_profile config/bash/bashrc config/bash/blerc; do
+for file in setup.sh tools/sudo-touch-id.sh config/bash/bash_profile config/bash/bashrc config/bash/blerc config/shell/homebrew.sh; do
     /bin/bash -n "$file" || break
 done
+/bin/zsh -n config/shell/homebrew.sh
 ```
 
-建议将新机流程保持为“软件清单 + 公共配置 + 本机私有覆盖”。密码和 SSH 私钥通过密码管理器或其他可信方式迁移；截图、输入法和 Karabiner 系统权限保留为明确的安装后步骤。额外的 `defaults write` 系统偏好、Touch ID sudo、开机启动项可以后按需加入，避免每次 shell 启动都修改系统文件。
+建议将新机流程保持为“软件清单 + 公共配置 + 本机私有覆盖”。密码和 SSH 私钥通过密码管理器或其他可信方式迁移；截图、输入法和 Karabiner 系统权限保留为明确的安装后步骤。额外的 `defaults write` 系统偏好和开机启动项可按需配置。

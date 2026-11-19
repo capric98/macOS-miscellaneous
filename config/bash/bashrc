@@ -6,17 +6,7 @@ export HOMEBREW_NO_ENV_HINTS=1
 export HOMEBREW_NO_UPGRADE_AUTO_UPDATES_CASKS=1
 
 # Also support interactive shells that do not read .bash_profile.
-if [[ ! ${HOMEBREW_PREFIX-} && -x /opt/homebrew/bin/brew ]]; then
-    eval "$(/opt/homebrew/bin/brew shellenv bash)"
-fi
-
-# ffmpeg-full is keg-only: expose it without forcing Homebrew links.
-if [[ -n ${HOMEBREW_PREFIX-} && -d $HOMEBREW_PREFIX/opt/ffmpeg-full/bin ]]; then
-    case ":$PATH:" in
-        *":$HOMEBREW_PREFIX/opt/ffmpeg-full/bin:"*) ;;
-        *) export PATH="$HOMEBREW_PREFIX/opt/ffmpeg-full/bin:$PATH" ;;
-    esac
-fi
+[[ ! -r $HOME/.config/macos-setup/homebrew.sh ]] || source "$HOME/.config/macos-setup/homebrew.sh"
 
 if (( BASH_VERSINFO[0] >= 4 )) && [[ -r $HOME/.local/share/blesh/ble.sh ]] && [[ ! ${BLE_VERSION-} ]]; then
     source -- "$HOME/.local/share/blesh/ble.sh" --attach=none

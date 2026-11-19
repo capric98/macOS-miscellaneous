@@ -42,6 +42,8 @@ realesrgan-ncnn-vulkan-macos
 /.gitconfig.local
 /.bash_profile
 /.bashrc
+/.zprofile
+/.zshrc
 /.blerc
 /.vimrc
 /.gitconfig
